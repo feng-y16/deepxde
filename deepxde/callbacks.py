@@ -491,9 +491,10 @@ class PDEResidualResampler(Callback):
 class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100):
+    def __init__(self, period=100, sample_num=100):
         super().__init__()
         self.period = period
+        self.sample_num = sample_num
 
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
@@ -517,7 +518,7 @@ class PDEGradientAccumulativeResampler(Callback):
             min_index = np.where(dist == np.min(dist))[0][0]
             return y_loss[min_index]
 
-        self.model.data.add_train_points_by_gradient(sample_prob)
+        self.model.data.add_train_points_by_gradient(sample_prob, self.sample_num)
 
         if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
             print("Initial value of self.num_bcs:", self.num_bcs_initial)

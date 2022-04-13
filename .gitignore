@@ -18,3 +18,7 @@ dist/
 
 # Data
 *.dat
+
+# Figures
+*.png
+*.pdf
