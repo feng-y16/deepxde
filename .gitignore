@@ -15,3 +15,6 @@ docs/_build/
 DeepXDE.egg-info/
 build/
 dist/
+
+# Data
+*.dat

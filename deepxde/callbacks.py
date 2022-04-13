@@ -506,7 +506,18 @@ class PDEGradientAccumulativeResampler(Callback):
         if self.epochs_since_last_resample < self.period:
             return
         self.epochs_since_last_resample = 0
-        self.model.data.add_train_points_by_gradient()
+        y_pred, _ = self.model._outputs_losses(True, self.model.train_state.X_train,
+                                               self.model.train_state.y_train,
+                                               self.model.train_state.train_aux_vars)
+        y_loss = np.linalg.norm(self.model.train_state.y_train - y_pred, ord=2, axis=1)
+        y_loss /= np.sum(y_loss)
+
+        def sample_prob(x):
+            dist = np.linalg.norm(self.model.train_state.X_train - x, ord=2, axis=1)
+            min_index = np.where(dist == np.min(dist))[0][0]
+            return y_loss[min_index]
+
+        self.model.data.add_train_points_by_gradient(sample_prob)
 
         if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
             print("Initial value of self.num_bcs:", self.num_bcs_initial)

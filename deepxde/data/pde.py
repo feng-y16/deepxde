@@ -186,8 +186,34 @@ class PDE(Data):
         self.train_x, self.train_y, self.train_aux_vars = None, None, None
         self.train_next_batch()
 
-    def add_train_points_by_gradient(self):
-        train_x_all = self.train_points()
+    def train_points_by_gradient(self, sample_prob):
+        X = np.empty((0, self.geom.dim), dtype=config.real(np))
+        if self.num_domain > 0:
+            sample_count = 0
+            while sample_count < self.num_domain:
+                tmp = self.geom.uniform_points(1, boundary=False)
+                if sample_prob(tmp) < np.random.rand():
+                    X = np.vstack((tmp, X))
+                    sample_count += 1
+        if self.num_boundary > 0:
+            sample_count = 0
+            while sample_count < self.num_domain:
+                tmp = self.geom.uniform_boundary_points(1)
+                if sample_prob(tmp) < np.random.rand():
+                    X = np.vstack((tmp, X))
+                    sample_count += 1
+        if self.anchors is not None:
+            X = np.vstack((self.anchors, X))
+        if self.exclusions is not None:
+
+            def is_not_excluded(x):
+                return not np.any([np.allclose(x, y) for y in self.exclusions])
+
+            X = np.array(list(filter(is_not_excluded, X)))
+        return X
+
+    def add_train_points_by_gradient(self, sample_prob):
+        train_x_all = self.train_points_by_gradient(sample_prob)
         train_x = self.bc_points()
         if self.pde is not None:
             train_x = np.vstack((train_x, train_x_all))

@@ -38,7 +38,6 @@ net = dde.nn.FNN(layer_size, activation, initializer)
 
 model = dde.Model(data, net)
 model.compile("adam", lr=0.001, metrics=["l2 relative error"])
-resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=5000)
-losshistory, train_state = model.train(epochs=20000, callbacks=[resampler])
-
+resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=1000)
+losshistory, train_state = model.train(epochs=2000, callbacks=[resampler])
 dde.saveplot(losshistory, train_state, issave=True, isplot=True)
