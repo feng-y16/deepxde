@@ -486,3 +486,31 @@ class PDEResidualResampler(Callback):
             raise ValueError(
                 "`num_bcs` changed! Please update the loss function by `model.compile`."
             )
+
+
+class PDEGradientAccumulativeResampler(Callback):
+    """Resample the training points for PDE losses every given period."""
+
+    def __init__(self, period=100):
+        super().__init__()
+        self.period = period
+
+        self.num_bcs_initial = None
+        self.epochs_since_last_resample = 0
+
+    def on_train_begin(self):
+        self.num_bcs_initial = self.model.data.num_bcs
+
+    def on_epoch_end(self):
+        self.epochs_since_last_resample += 1
+        if self.epochs_since_last_resample < self.period:
+            return
+        self.epochs_since_last_resample = 0
+        self.model.data.add_train_points_by_gradient()
+
+        if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
+            print("Initial value of self.num_bcs:", self.num_bcs_initial)
+            print("self.model.data.num_bcs:", self.model.data.num_bcs)
+            raise ValueError(
+                "`num_bcs` changed! Please update the loss function by `model.compile`."
+            )

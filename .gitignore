@@ -10,3 +10,8 @@ docs/_build/
 
 # VSCode
 .vscode/
+
+# Build
+DeepXDE.egg-info/
+build/
+dist/

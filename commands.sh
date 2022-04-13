@@ -1,0 +1,2 @@
+DDEBACKEND=tensorflow python experiments/ode_system/ode_system.py
+DDEBACKEND=tensorflow python experiments/schrodinger/schrodinger.py

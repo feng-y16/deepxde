@@ -186,6 +186,20 @@ class PDE(Data):
         self.train_x, self.train_y, self.train_aux_vars = None, None, None
         self.train_next_batch()
 
+    def add_train_points_by_gradient(self):
+        train_x_all = self.train_points()
+        train_x = self.bc_points()
+        if self.pde is not None:
+            train_x = np.vstack((train_x, train_x_all))
+        train_y = self.soln(train_x) if self.soln else None
+        if self.auxiliary_var_fn is not None:
+            train_aux_vars = self.auxiliary_var_fn(train_x).astype(
+                config.real(np)
+            )
+            self.train_aux_vars = np.concatenate((self.train_aux_vars, train_aux_vars))
+        self.train_x = np.concatenate((self.train_x, train_x))
+        self.train_y = np.concatenate((self.train_y, train_y))
+
     def add_anchors(self, anchors):
         """Add new points for training PDE losses. The BC points will not be updated."""
         anchors = anchors.astype(config.real(np))
