@@ -214,7 +214,8 @@ class PDE(Data):
             )
             self.train_aux_vars = np.concatenate((self.train_aux_vars, train_aux_vars))
         self.train_x = np.concatenate((self.train_x, train_x))
-        self.train_y = np.concatenate((self.train_y, train_y))
+        if self.train_y is not None:
+            self.train_y = np.concatenate((self.train_y, train_y))
         self.num_domain += sample_num
 
     def add_anchors(self, anchors):

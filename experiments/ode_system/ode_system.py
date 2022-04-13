@@ -13,7 +13,6 @@ def parse_args():
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=35)
     parser.add_argument("-rest", "--resample-times", type=int, default=20)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1)
-    parser.add_argument("-nte", "--num-test-samples", type=int, default=100)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
@@ -43,10 +42,6 @@ def func(x):
 
 warnings.filterwarnings("ignore")
 args = parse_args()
-geom = dde.geometry.TimeDomain(0, 10)
-ic1 = dde.icbc.IC(geom, np.sin, boundary, component=0)
-ic2 = dde.icbc.IC(geom, np.cos, boundary, component=1)
-
 resample = args.resample
 resample_times = args.resample_times
 resample_num = args.resample_numbers
@@ -54,6 +49,11 @@ epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
+
+geom = dde.geometry.TimeDomain(0, 10)
+ic1 = dde.icbc.IC(geom, np.sin, boundary, component=0)
+ic2 = dde.icbc.IC(geom, np.cos, boundary, component=1)
+
 if resample:
     data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain, 2, solution=func, num_test=100)
 else:

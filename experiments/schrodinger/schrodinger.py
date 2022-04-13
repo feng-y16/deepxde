@@ -1,10 +1,22 @@
 import numpy as np
-
 import deepxde as dde
-
+import os
+import argparse
+import warnings
 # For plotting
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-ep", "--epochs", type=int, default=5000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=20)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=10)
+    parser.add_argument("-r", "--resample", action="store_true", default=False)
+    return parser.parse_known_args()[0]
+
 
 x_lower = -5
 x_upper = 5
@@ -24,9 +36,8 @@ space_domain = dde.geometry.Interval(x_lower, x_upper)
 time_domain = dde.geometry.TimeDomain(t_lower, t_upper)
 geomtime = dde.geometry.GeometryXTime(space_domain, time_domain)
 
+
 # The "physics-informed" part of the loss
-
-
 def pde(x, y):
     """
     INPUTS:
@@ -87,19 +98,40 @@ def init_cond_v(x):
     return 0
 
 
+warnings.filterwarnings("ignore")
+args = parse_args()
+resample = args.resample
+resample_times = args.resample_times
+resample_num = args.resample_numbers
+epochs = args.epochs
+num_train_samples_domain = args.num_train_samples_domain
+print("resample:", resample)
+print("total data points:", num_train_samples_domain + resample_times * resample_num)
+
+
 ic_u = dde.icbc.IC(geomtime, init_cond_u, lambda _, on_initial: on_initial, component=0)
 ic_v = dde.icbc.IC(geomtime, init_cond_v, lambda _, on_initial: on_initial, component=1)
 
-
-data = dde.data.TimePDE(
-    geomtime,
-    pde,
-    [bc_u_0, bc_u_1, bc_v_0, bc_v_1, ic_u, ic_v],
-    num_domain=10000,
-    num_boundary=20,
-    num_initial=200,
-    train_distribution="pseudo",
-)
+if resample:
+    data = dde.data.TimePDE(
+        geomtime,
+        pde,
+        [bc_u_0, bc_u_1, bc_v_0, bc_v_1, ic_u, ic_v],
+        num_domain=num_train_samples_domain,
+        num_boundary=20,
+        num_initial=200,
+        train_distribution="pseudo",
+    )
+else:
+    data = dde.data.TimePDE(
+        geomtime,
+        pde,
+        [bc_u_0, bc_u_1, bc_v_0, bc_v_1, ic_u, ic_v],
+        num_domain=num_train_samples_domain + resample_times * resample_num,
+        num_boundary=20,
+        num_initial=200,
+        train_distribution="pseudo",
+    )
 
 # Network architecture
 net = dde.nn.FNN([2] + [100] * 4 + [2], "tanh", "Glorot normal")
@@ -109,8 +141,19 @@ model = dde.Model(data, net)
 # To employ a GPU accelerated system is highly encouraged.
 
 model.compile("adam", lr=1e-3, loss="MSE")
-model.train(epochs=10000, display_every=1000)
+if resample:
+    resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=epochs // (resample_times + 1) + 1,
+                                                               sample_num=resample_num)
+    losshistory, train_state = model.train(epochs=epochs, callbacks=[resampler])
+else:
+    model.train(epochs=epochs)
 
+
+save_dir = os.path.dirname(os.path.abspath(__file__))
+if resample:
+    prefix = "ag_"
+else:
+    prefix = ""
 # Make prediction
 prediction = model.predict(X_star, operator=None)
 
@@ -152,4 +195,7 @@ ax[2].imshow(
     aspect="auto",
 )
 
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(save_dir, prefix + "error.png"))
+plt.savefig(os.path.join(save_dir, prefix + "error.pdf"))
+plt.close()

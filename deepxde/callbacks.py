@@ -491,10 +491,11 @@ class PDEResidualResampler(Callback):
 class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100, sample_num=100):
+    def __init__(self, period=100, sample_num=100, sigma=1):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
+        self.sigma = sigma
 
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
@@ -510,13 +511,16 @@ class PDEGradientAccumulativeResampler(Callback):
         y_pred, _ = self.model._outputs_losses(True, self.model.train_state.X_train,
                                                self.model.train_state.y_train,
                                                self.model.train_state.train_aux_vars)
-        y_loss = np.linalg.norm(self.model.train_state.y_train - y_pred, ord=2, axis=1)
+        if self.model.train_state.y_train is not None:
+            y_loss = np.linalg.norm(self.model.train_state.y_train - y_pred, ord=2, axis=1)
+        else:
+            y_loss = np.linalg.norm(y_pred, ord=2, axis=1)
         y_loss /= np.sum(y_loss)
 
         def sample_prob(x):
             dist = np.linalg.norm(self.model.train_state.X_train - x, ord=2, axis=1)
-            min_index = np.where(dist == np.min(dist))[0][0]
-            return y_loss[min_index]
+            prob = np.sum(1 / np.sqrt(2 * np.pi) / self.sigma * np.exp(-dist ** 2 / (2 * self.sigma ** 2)))
+            return prob
 
         self.model.data.add_train_points_by_gradient(sample_prob, self.sample_num)
 
