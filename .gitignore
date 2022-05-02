@@ -18,6 +18,7 @@ dist/
 
 # Data
 *.dat
+*.pkl
 
 # Figures
 *.png
