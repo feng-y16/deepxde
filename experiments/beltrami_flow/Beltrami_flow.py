@@ -310,23 +310,7 @@ print("L2 relative error in v:", l2_difference_v_1)
 print("L2 relative error in w:", l2_difference_w_1)
 
 
-def contour(grid, x, y, z, title, levels=50):
-    """
-    Contour plot.
-
-    Args:
-        grid: plot position.
-        x: x-array.
-        y: y-array.
-        z: z-array.
-        title: title string.
-        levels: number of contour lines.
-    """
-
-    # get the value range
-    vmin = 0
-    vmax = 1
-
+def contour(grid, x, y, z, title, levels=50, vmin=0, vmax=1):
     # plot a contour
     plt.subplot(grid)
     plt.contour(x, y, z, colors='k', linewidths=0.2, levels=levels, vmin=vmin, vmax=vmax)
