@@ -1,125 +1,346 @@
 """
-FEniCS tutorial demo program: Incompressible Navier-Stokes equations
-for channel flow (Poisseuille) on the unit square using the
-Incremental Pressure Correction Scheme (IPCS).
-  u' + u . nabla(u)) - div(sigma(u, p)) = f
-                                 div(u) = 0
+Solves the incompressible Navier Stokes equations in a lid-driven cavity
+scenario using Finite Differences, explicit timestepping and Chorin's Projection.
+
+Momentum:           ∂u/∂t + (u ⋅ ∇) u = − 1/ρ ∇p + ν ∇²u + f
+
+Incompressibility:  ∇ ⋅ u = 0
+
+
+u:  Velocity (2d vector)
+p:  Pressure
+f:  Forcing (here =0)
+ν:  Kinematic Viscosity
+ρ:  Density
+t:  Time
+∇:  Nabla operator (defining nonlinear convection, gradient and divergence)
+∇²: Laplace Operator
+
+----
+
+Lid-Driven Cavity Scenario:
+
+
+                            ------>>>>> u_top
+
+          1 +-------------------------------------------------+
+            |                                                 |
+            |             *                      *            |
+            |          *           *    *    *                |
+        0.8 |                                                 |
+            |                                 *               |
+            |     *       *                                   |
+            |                      *     *                    |
+        0.6 |                                            *    |
+u = 0       |      *                             *            |   u = 0
+v = 0       |                             *                   |   v = 0
+            |                     *                           |
+            |           *                *         *          |
+        0.4 |                                                 |
+            |                                                 |
+            |      *            *             *               |
+            |           *                             *       |
+        0.2 |                       *           *             |
+            |                               *                 |
+            |  *          *      *                 *       *  |
+            |                            *                    |
+          0 +-------------------------------------------------+
+            0        0.2       0.4       0.6       0.8        1
+
+                                    u = 0
+                                    v = 0
+
+* Velocity and pressure have zero initial condition.
+* Homogeneous Dirichlet Boundary Conditions everywhere except for horizontal
+  velocity at top. It is driven by an external flow.
+
+-----
+
+Solution strategy:   (Projection Method: Chorin's Splitting)
+
+1. Solve Momentum equation without pressure gradient for tentative velocity
+   (with given Boundary Conditions)
+
+    ∂u/∂t + (u ⋅ ∇) u = ν ∇²u
+
+2. Solve pressure poisson equation for pressure at next point in time
+   (with homogeneous Neumann Boundary Conditions everywhere except for
+   the top, where it is homogeneous Dirichlet)
+
+    ∇²p = ρ/Δt ∇ ⋅ u
+
+3. Correct the velocities (and again enforce the Velocity Boundary Conditions)
+
+    u ← u − Δt/ρ ∇ p
+
+-----
+
+    Expected Outcome: After some time a swirling motion will take place
+
+          1 +-------------------------------------------------+
+            |                                                 |
+            |                                                 |
+            |                                                 |
+        0.8 |                                                 |
+            |                      *-->*                      |
+            |                ******     ******                |
+            |              **                 **              |
+        0.6 |             *                     *             |
+            |             *                      *            |
+            |            *                        *           |
+            |            *                       *            |
+            |             *                     *             |
+        0.4 |             *                     *             |
+            |              **                 **              |
+            |                ******     ******                |
+            |                      *<--*                      |
+        0.2 |                                                 |
+            |                                                 |
+            |                                                 |
+            |                                                 |
+          0 +-------------------------------------------------+
+            0        0.2       0.4       0.6       0.8        1
+
+------
+
+Strategy in index notation
+
+u = [u, v]
+x = [x, y]
+
+1. Solve tentative velocity + velocity BC
+
+    ∂u/∂t + u ∂u/∂x + v ∂u/∂y = ν ∂²u/∂x² + ν ∂²u/∂y²
+
+    ∂v/∂t + u ∂v/∂x + v ∂v/∂y = ν ∂²v/∂x² + ν ∂²v/∂y²
+
+2. Solve pressure poisson + pressure BC
+
+    ∂²p/∂x² + ∂²p/∂y² = ρ/Δt (∂u/∂x + ∂v/∂y)
+
+3. Correct velocity + velocity BC
+
+    u ← u − Δt/ρ ∂p/∂x
+
+    v ← v − Δt/ρ ∂p/∂y
+
+------
+
+IMPORTANT: Take care to select a timestep that ensures stability
 """
-
-from fenics import *
+import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
-T = 10.0           # final time
-num_steps = 500    # number of time steps
-dt = T / num_steps # time step size
-mu = 1             # kinematic viscosity
-rho = 1            # density
+N_POINTS = 41
+DOMAIN_SIZE = 1.0
+N_ITERATIONS = 500
+TIME_STEP_LENGTH = 0.001
+KINEMATIC_VISCOSITY = 0.01
+DENSITY = 1.0
+HORIZONTAL_VELOCITY_TOP = 1.0
 
-# Create mesh and define function spaces
-mesh = UnitSquareMesh(16, 16)
-V = VectorFunctionSpace(mesh, 'P', 2)
-Q = FunctionSpace(mesh, 'P', 1)
+N_PRESSURE_POISSON_ITERATIONS = 50
+STABILITY_SAFETY_FACTOR = 0.5
 
-# Define boundaries
-inflow  = 'near(x[0], 0)'
-outflow = 'near(x[0], 1)'
-walls   = 'near(x[1], 0) || near(x[1], 1)'
 
-# Define boundary conditions
-bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
-bcp_inflow  = DirichletBC(Q, Constant(8), inflow)
-bcp_outflow = DirichletBC(Q, Constant(0), outflow)
-bcu = [bcu_noslip]
-bcp = [bcp_inflow, bcp_outflow]
+def solve(n_points=41):
+    element_length = DOMAIN_SIZE / (n_points - 1)
+    x = np.linspace(0.0, DOMAIN_SIZE, n_points)
+    y = np.linspace(0.0, DOMAIN_SIZE, n_points)
 
-# Define trial and test functions
-u = TrialFunction(V)
-v = TestFunction(V)
-p = TrialFunction(Q)
-q = TestFunction(Q)
+    X, Y = np.meshgrid(x, y)
 
-# Define functions for solutions at previous and current time steps
-u_n = Function(V)
-u_  = Function(V)
-p_n = Function(Q)
-p_  = Function(Q)
+    u_prev = np.zeros_like(X)
+    v_prev = np.zeros_like(X)
+    p_prev = np.zeros_like(X)
 
-# Define expressions used in variational forms
-U   = 0.5*(u_n + u)
-n   = FacetNormal(mesh)
-f   = Constant((0, 0))
-k   = Constant(dt)
-mu  = Constant(mu)
-rho = Constant(rho)
+    def central_difference_x(f):
+        diff = np.zeros_like(f)
+        diff[1:-1, 1:-1] = (
+                                   f[1:-1, 2:]
+                                   -
+                                   f[1:-1, 0:-2]
+                           ) / (
+                                   2 * element_length
+                           )
+        return diff
 
-# Define strain-rate tensor
-def epsilon(u):
-    return sym(nabla_grad(u))
+    def central_difference_y(f):
+        diff = np.zeros_like(f)
+        diff[1:-1, 1:-1] = (
+                                   f[2:, 1:-1]
+                                   -
+                                   f[0:-2, 1:-1]
+                           ) / (
+                                   2 * element_length
+                           )
+        return diff
 
-# Define stress tensor
-def sigma(u, p):
-    return 2*mu*epsilon(u) - p*Identity(len(u))
+    def laplace(f):
+        diff = np.zeros_like(f)
+        diff[1:-1, 1:-1] = (
+                                   f[1:-1, 0:-2]
+                                   +
+                                   f[0:-2, 1:-1]
+                                   -
+                                   4
+                                   *
+                                   f[1:-1, 1:-1]
+                                   +
+                                   f[1:-1, 2:]
+                                   +
+                                   f[2:, 1:-1]
+                           ) / (
+                                   element_length ** 2
+                           )
+        return diff
 
-# Define variational problem for step 1
-F1 = rho*dot((u - u_n) / k, v)*dx + \
-     rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
-   + inner(sigma(U, p_n), epsilon(v))*dx \
-   + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
-   - dot(f, v)*dx
-a1 = lhs(F1)
-L1 = rhs(F1)
+    maximum_possible_time_step_length = (
+            0.5 * element_length ** 2 / KINEMATIC_VISCOSITY
+    )
+    if TIME_STEP_LENGTH > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
+        raise RuntimeError("Stability is not guarenteed")
 
-# Define variational problem for step 2
-a2 = dot(nabla_grad(p), nabla_grad(q))*dx
-L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
+    for _ in tqdm(range(N_ITERATIONS)):
+        d_u_prev__d_x = central_difference_x(u_prev)
+        d_u_prev__d_y = central_difference_y(u_prev)
+        d_v_prev__d_x = central_difference_x(v_prev)
+        d_v_prev__d_y = central_difference_y(v_prev)
+        laplace__u_prev = laplace(u_prev)
+        laplace__v_prev = laplace(v_prev)
 
-# Define variational problem for step 3
-a3 = dot(u, v)*dx
-L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
+        # Perform a tentative step by solving the momentum equation without the
+        # pressure gradient
+        u_tent = (
+                u_prev
+                +
+                TIME_STEP_LENGTH * (
+                        -
+                        (
+                                u_prev * d_u_prev__d_x
+                                +
+                                v_prev * d_u_prev__d_y
+                        )
+                        +
+                        KINEMATIC_VISCOSITY * laplace__u_prev
+                )
+        )
+        v_tent = (
+                v_prev
+                +
+                TIME_STEP_LENGTH * (
+                        -
+                        (
+                                u_prev * d_v_prev__d_x
+                                +
+                                v_prev * d_v_prev__d_y
+                        )
+                        +
+                        KINEMATIC_VISCOSITY * laplace__v_prev
+                )
+        )
 
-# Assemble matrices
-A1 = assemble(a1)
-A2 = assemble(a2)
-A3 = assemble(a3)
+        # Velocity Boundary Conditions: Homogeneous Dirichlet BC everywhere
+        # except for the horizontal velocity at the top, which is prescribed
+        u_tent[0, :] = 0.0
+        u_tent[:, 0] = 0.0
+        u_tent[:, -1] = 0.0
+        u_tent[-1, :] = HORIZONTAL_VELOCITY_TOP
+        v_tent[0, :] = 0.0
+        v_tent[:, 0] = 0.0
+        v_tent[:, -1] = 0.0
+        v_tent[-1, :] = 0.0
 
-# Apply boundary conditions to matrices
-[bc.apply(A1) for bc in bcu]
-[bc.apply(A2) for bc in bcp]
+        d_u_tent__d_x = central_difference_x(u_tent)
+        d_v_tent__d_y = central_difference_y(v_tent)
 
-# Time-stepping
-t = 0
-for n in range(num_steps):
+        # Compute a pressure correction by solving the pressure-poisson equation
+        rhs = (
+                DENSITY / TIME_STEP_LENGTH
+                *
+                (
+                        d_u_tent__d_x
+                        +
+                        d_v_tent__d_y
+                )
+        )
 
-    # Update current time
-    t += dt
+        for _ in range(N_PRESSURE_POISSON_ITERATIONS):
+            p_next = np.zeros_like(p_prev)
+            p_next[1:-1, 1:-1] = 1 / 4 * (
+                    +
+                    p_prev[1:-1, 0:-2]
+                    +
+                    p_prev[0:-2, 1:-1]
+                    +
+                    p_prev[1:-1, 2:]
+                    +
+                    p_prev[2:, 1:-1]
+                    -
+                    element_length ** 2
+                    *
+                    rhs[1:-1, 1:-1]
+            )
 
-    # Step 1: Tentative velocity step
-    b1 = assemble(L1)
-    [bc.apply(b1) for bc in bcu]
-    solve(A1, u_.vector(), b1)
+            # Pressure Boundary Conditions: Homogeneous Neumann Boundary
+            # Conditions everywhere except for the top, where it is a
+            # homogeneous Dirichlet BC
+            p_next[:, -1] = p_next[:, -2]
+            p_next[0, :] = p_next[1, :]
+            p_next[:, 0] = p_next[:, 1]
+            p_next[-1, :] = 0.0
 
-    # Step 2: Pressure correction step
-    b2 = assemble(L2)
-    [bc.apply(b2) for bc in bcp]
-    solve(A2, p_.vector(), b2)
+            p_prev = p_next
 
-    # Step 3: Velocity correction step
-    b3 = assemble(L3)
-    solve(A3, u_.vector(), b3)
+        d_p_next__d_x = central_difference_x(p_next)
+        d_p_next__d_y = central_difference_y(p_next)
 
-    # Plot solution
-    plot(u_)
+        # Correct the velocities such that the fluid stays incompressible
+        u_next = (
+                u_tent
+                -
+                TIME_STEP_LENGTH / DENSITY
+                *
+                d_p_next__d_x
+        )
+        v_next = (
+                v_tent
+                -
+                TIME_STEP_LENGTH / DENSITY
+                *
+                d_p_next__d_y
+        )
 
-    # Compute error
-    u_e = Expression(('4*x[1]*(1.0 - x[1])', '0'), degree=2)
-    u_e = interpolate(u_e, V)
-    error = np.abs(u_e.vector().array() - u_.vector().array()).max()
-    print('t = %.2f: error = %.3g' % (t, error))
-    print('max u:', u_.vector().array().max())
+        # Velocity Boundary Conditions: Homogeneous Dirichlet BC everywhere
+        # except for the horizontal velocity at the top, which is prescribed
+        u_next[0, :] = 0.0
+        u_next[:, 0] = 0.0
+        u_next[:, -1] = 0.0
+        u_next[-1, :] = HORIZONTAL_VELOCITY_TOP
+        v_next[0, :] = 0.0
+        v_next[:, 0] = 0.0
+        v_next[:, -1] = 0.0
+        v_next[-1, :] = 0.0
 
-    # Update previous solution
-    u_n.assign(u_)
-    p_n.assign(p_)
+        # Advance in time
+        u_prev = u_next
+        v_prev = v_next
+        p_prev = p_next
 
-# Hold plot
-interactive()
+    # The [::2, ::2] selects only every second entry (less cluttering plot)
+    # plt.style.use("dark_background")
+    # plt.figure()
+    # plt.contourf(X[::2, ::2], Y[::2, ::2], p_next[::2, ::2], cmap="coolwarm")
+    # plt.colorbar()
+    #
+    # plt.quiver(X[::2, ::2], Y[::2, ::2], u_next[::2, ::2], v_next[::2, ::2], color="black")
+    # # plt.streamplot(X[::2, ::2], Y[::2, ::2], u_next[::2, ::2], v_next[::2, ::2], color="black")
+    # plt.xlim((0, 1))
+    # plt.ylim((0, 1))
+    # plt.show()
+    return u_next, v_next, p_next
+
+
+if __name__ == "__main__":
+    main()
