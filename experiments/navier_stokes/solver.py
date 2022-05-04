@@ -203,7 +203,7 @@ def solve(n_points=1000, n_iterations=500, time_length=1, re=100):
     if time_step_length > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
         raise RuntimeError("Stability is not guarenteed")
 
-    for _ in tqdm(range(n_iterations)):
+    for _ in range(n_iterations):
         d_u_prev__d_x = central_difference_x(u_prev)
         d_u_prev__d_y = central_difference_y(u_prev)
         d_v_prev__d_x = central_difference_x(v_prev)
