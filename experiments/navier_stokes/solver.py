@@ -132,19 +132,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-N_POINTS = 41
 DOMAIN_SIZE = 1.0
-N_ITERATIONS = 500
-TIME_STEP_LENGTH = 0.001
-KINEMATIC_VISCOSITY = 0.01
 DENSITY = 1.0
 HORIZONTAL_VELOCITY_TOP = 1.0
-
 N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
 
-def solve(n_points=41):
+def solve(n_points=1000, n_iterations=500, time_length=1, re=100):
+    time_step_length = time_length / n_iterations
+    if time_length == 0:
+        n_iterations = 0
+    kinematic_viscosity = 1 / re
     element_length = DOMAIN_SIZE / (n_points - 1)
     x = np.linspace(0.0, DOMAIN_SIZE, n_points)
     y = np.linspace(0.0, DOMAIN_SIZE, n_points)
@@ -154,6 +153,8 @@ def solve(n_points=41):
     u_prev = np.zeros_like(X)
     v_prev = np.zeros_like(X)
     p_prev = np.zeros_like(X)
+
+    p_next = None
 
     def central_difference_x(f):
         diff = np.zeros_like(f)
@@ -197,12 +198,12 @@ def solve(n_points=41):
         return diff
 
     maximum_possible_time_step_length = (
-            0.5 * element_length ** 2 / KINEMATIC_VISCOSITY
+            0.5 * element_length ** 2 / kinematic_viscosity
     )
-    if TIME_STEP_LENGTH > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
+    if time_step_length > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
         raise RuntimeError("Stability is not guarenteed")
 
-    for _ in tqdm(range(N_ITERATIONS)):
+    for _ in tqdm(range(n_iterations)):
         d_u_prev__d_x = central_difference_x(u_prev)
         d_u_prev__d_y = central_difference_y(u_prev)
         d_v_prev__d_x = central_difference_x(v_prev)
@@ -215,7 +216,7 @@ def solve(n_points=41):
         u_tent = (
                 u_prev
                 +
-                TIME_STEP_LENGTH * (
+                time_step_length * (
                         -
                         (
                                 u_prev * d_u_prev__d_x
@@ -223,13 +224,13 @@ def solve(n_points=41):
                                 v_prev * d_u_prev__d_y
                         )
                         +
-                        KINEMATIC_VISCOSITY * laplace__u_prev
+                        kinematic_viscosity * laplace__u_prev
                 )
         )
         v_tent = (
                 v_prev
                 +
-                TIME_STEP_LENGTH * (
+                time_step_length * (
                         -
                         (
                                 u_prev * d_v_prev__d_x
@@ -237,7 +238,7 @@ def solve(n_points=41):
                                 v_prev * d_v_prev__d_y
                         )
                         +
-                        KINEMATIC_VISCOSITY * laplace__v_prev
+                        kinematic_viscosity * laplace__v_prev
                 )
         )
 
@@ -257,7 +258,7 @@ def solve(n_points=41):
 
         # Compute a pressure correction by solving the pressure-poisson equation
         rhs = (
-                DENSITY / TIME_STEP_LENGTH
+                DENSITY / time_step_length
                 *
                 (
                         d_u_tent__d_x
@@ -300,14 +301,14 @@ def solve(n_points=41):
         u_next = (
                 u_tent
                 -
-                TIME_STEP_LENGTH / DENSITY
+                time_step_length / DENSITY
                 *
                 d_p_next__d_x
         )
         v_next = (
                 v_tent
                 -
-                TIME_STEP_LENGTH / DENSITY
+                time_step_length / DENSITY
                 *
                 d_p_next__d_y
         )
@@ -328,19 +329,8 @@ def solve(n_points=41):
         v_prev = v_next
         p_prev = p_next
 
-    # The [::2, ::2] selects only every second entry (less cluttering plot)
-    # plt.style.use("dark_background")
-    # plt.figure()
-    # plt.contourf(X[::2, ::2], Y[::2, ::2], p_next[::2, ::2], cmap="coolwarm")
-    # plt.colorbar()
-    #
-    # plt.quiver(X[::2, ::2], Y[::2, ::2], u_next[::2, ::2], v_next[::2, ::2], color="black")
-    # # plt.streamplot(X[::2, ::2], Y[::2, ::2], u_next[::2, ::2], v_next[::2, ::2], color="black")
-    # plt.xlim((0, 1))
-    # plt.ylim((0, 1))
-    # plt.show()
-    return u_next, v_next, p_next
+    return u_prev.reshape(-1), v_prev.reshape(-1), p_prev.reshape(-1)
 
 
 if __name__ == "__main__":
-    main()
+    solve()

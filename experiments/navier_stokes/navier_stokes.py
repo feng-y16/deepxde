@@ -8,6 +8,7 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
+from solver import solve
 
 
 def parse_args():
@@ -24,7 +25,7 @@ def parse_args():
 
 a = 1
 d = 1
-Re = 40
+Re = 100
 
 
 def pde(x, u):
@@ -70,6 +71,59 @@ def v_func(x):
     return np.zeros_like(x[:, 0:1])
 
 
+def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
+    # plot a contour
+    plt.subplot(grid)
+    plt.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
+    plt.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
+    plt.title(title)
+    m = plt.cm.ScalarMappable(cmap='rainbow', norm=Normalize(vmin=v_min, vmax=v_max))
+    m.set_array(data_z)
+    m.set_clim(v_min, v_max)
+    cbar = plt.colorbar(m, pad=0.03, aspect=25, format='%.0e')
+    cbar.mappable.set_clim(v_min, v_max)
+
+
+def test_nn(times=None):
+    if times is None:
+        times = [0.01, 0.5, 1.0]
+    for time in times:
+        x, y = np.meshgrid(np.linspace(0, 1, num_test_samples), np.linspace(0, 1, num_test_samples))
+        X = np.vstack((np.ravel(x), np.ravel(y))).T
+        t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
+        X = np.hstack((X, t))
+        output = model.predict(X)
+        u_pred = output[:, 0].reshape(-1)
+        v_pred = output[:, 1].reshape(-1)
+        p_pred = output[:, 2].reshape(-1)
+        u_exact, v_exact, p_exact = solve(num_test_samples, 500, time, Re)
+        l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
+        l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
+        l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
+        residual = np.mean(np.absolute(model.predict(X, operator=pde)))
+        print("Accuracy at t = {}:".format(time))
+        print("Mean residual:", residual)
+        print("L2 relative error in u:", l2_difference_u)
+        print("L2 relative error in v:", l2_difference_v)
+        print("L2 relative error in v:", l2_difference_p)
+
+        plt.figure(figsize=(12, 6))
+        gs = GridSpec(2, 3)
+        u_min = min(np.min(u_pred), np.min(u_exact))
+        u_max = max(np.max(u_pred), np.max(u_exact))
+        v_min = min(np.min(v_pred), np.min(v_exact))
+        v_max = max(np.max(v_pred), np.max(v_exact))
+        p_min = min(np.min(p_pred), np.min(p_exact))
+        p_max = max(np.max(p_pred), np.max(p_exact))
+        contour(gs[0, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples), 'u', u_min, u_max)
+        contour(gs[0, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples), 'v', v_min, v_max)
+        contour(gs[0, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples), 'p', p_min, p_max)
+        contour(gs[1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u_gt', u_min, u_max)
+        contour(gs[1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v_gt', v_min, v_max)
+        contour(gs[1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_gt', p_min, p_max)
+        plt.savefig(os.path.join(save_dir, prefix + "_t={}.png".format(time)))
+
+
 warnings.filterwarnings("ignore")
 args = parse_args()
 resample = args.resample
@@ -112,8 +166,8 @@ if resample:
             initial_condition_v,
         ],
         num_domain=num_train_samples_domain,
-        num_boundary=1000,
-        num_initial=1000,
+        num_boundary=5000,
+        num_initial=5000,
         num_test=10000,
     )
 else:
@@ -127,8 +181,8 @@ else:
             initial_condition_v,
         ],
         num_domain=num_train_samples_domain + resample_times * resample_num,
-        num_boundary=1000,
-        num_initial=1000,
+        num_boundary=5000,
+        num_initial=5000,
         num_test=10000,
     )
 
@@ -164,107 +218,7 @@ else:
     model = dde.Model(data, net)
     model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
 
-
-x, y = np.meshgrid(np.linspace(0, 1, num_test_samples), np.linspace(0, 1, num_test_samples))
-
-X = np.vstack((np.ravel(x), np.ravel(y))).T
-
-t_0 = np.zeros(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
-t_1 = np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
-
-X_0 = np.hstack((X, t_0))
-X_1 = np.hstack((X, t_1))
-
-output_0 = model.predict(X_0)
-output_1 = model.predict(X_1)
-
-u_pred_0 = output_0[:, 0].reshape(-1)
-v_pred_0 = output_0[:, 1].reshape(-1)
-p_pred_0 = output_0[:, 2].reshape(-1)
-
-u_exact_0 = 0.1 * np.ones_like(u_pred_0)
-v_exact_0 = 0.1 * np.ones_like(v_pred_0)
-p_exact_0 = 0.1 * np.ones_like(p_pred_0)
-
-u_pred_1 = output_1[:, 0].reshape(-1)
-v_pred_1 = output_1[:, 1].reshape(-1)
-p_pred_1 = output_1[:, 2].reshape(-1)
-
-u_exact_1 = 0.1 * np.ones_like(u_pred_1)
-v_exact_1 = 0.1 * np.ones_like(v_pred_1)
-p_exact_1 = 0.1 * np.ones_like(p_pred_1)
-
-f_0 = model.predict(X_0, operator=pde)
-f_1 = model.predict(X_1, operator=pde)
-
-l2_difference_u_0 = dde.metrics.l2_relative_error(u_exact_0, u_pred_0)
-l2_difference_v_0 = dde.metrics.l2_relative_error(v_exact_0, v_pred_0)
-l2_difference_p_0 = dde.metrics.l2_relative_error(p_exact_0, p_pred_0)
-residual_0 = np.mean(np.absolute(f_0))
-
-l2_difference_u_1 = dde.metrics.l2_relative_error(u_exact_1, u_pred_1)
-l2_difference_v_1 = dde.metrics.l2_relative_error(v_exact_1, v_pred_1)
-l2_difference_p_1 = dde.metrics.l2_relative_error(p_exact_1, p_pred_1)
-residual_1 = np.mean(np.absolute(f_1))
-
-print("Accuracy at t = 0:")
-print("Mean residual:", residual_0)
-print("L2 relative error in u:", l2_difference_u_0)
-print("L2 relative error in v:", l2_difference_v_0)
-print("L2 relative error in v:", l2_difference_p_0)
-print("\n")
-print("Accuracy at t = 1:")
-print("Mean residual:", residual_1)
-print("L2 relative error in u:", l2_difference_u_1)
-print("L2 relative error in v:", l2_difference_v_1)
-print("L2 relative error in p:", l2_difference_p_1)
-
-
-def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=50):
-    # plot a contour
-    plt.subplot(grid)
-    plt.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
-    plt.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
-    plt.title(title)
-    m = plt.cm.ScalarMappable(cmap='rainbow', norm=Normalize(vmin=v_min, vmax=v_max))
-    m.set_array(data_z)
-    m.set_clim(v_min, v_max)
-    cbar = plt.colorbar(m, pad=0.03, aspect=25, format='%.0e')
-    cbar.mappable.set_clim(v_min, v_max)
-
-
 plt.rcParams['font.sans-serif'] = 'Times New Roman'
 plt.rcParams.update({'figure.autolayout': True})
 plt.rc('font', size=18)
-
-plt.figure(figsize=(12, 6))
-gs = GridSpec(2, 3)
-u_min = min(np.min(u_pred_0), np.min(u_exact_0))
-u_max = max(np.max(u_pred_0), np.max(u_exact_0))
-v_min = min(np.min(v_pred_0), np.min(v_exact_0))
-v_max = max(np.max(v_pred_0), np.max(v_exact_0))
-p_min = min(np.min(p_pred_0), np.min(p_exact_0))
-p_max = max(np.max(p_pred_0), np.max(p_exact_0))
-contour(gs[0, 0], x, y, u_pred_0.reshape(num_test_samples, num_test_samples), 'u', u_min, u_max)
-contour(gs[0, 1], x, y, v_pred_0.reshape(num_test_samples, num_test_samples), 'v', v_min, v_max)
-contour(gs[0, 2], x, y, p_pred_0.reshape(num_test_samples, num_test_samples), 'p', p_min, p_max)
-contour(gs[1, 0], x, y, u_exact_0.reshape(num_test_samples, num_test_samples), 'u_gt', u_min, u_max)
-contour(gs[1, 1], x, y, v_exact_0.reshape(num_test_samples, num_test_samples), 'v_gt', v_min, v_max)
-contour(gs[1, 2], x, y, p_exact_0.reshape(num_test_samples, num_test_samples), 'p_gt', p_min, p_max)
-plt.savefig(os.path.join(save_dir, prefix + "_t=0.png"))
-
-plt.figure(figsize=(12, 6))
-gs = GridSpec(2, 3)
-u_min = min(np.min(u_pred_1), np.min(u_exact_1))
-u_max = max(np.max(u_pred_1), np.max(u_exact_1))
-v_min = min(np.min(v_pred_1), np.min(v_exact_1))
-v_max = max(np.max(v_pred_1), np.max(v_exact_1))
-p_min = min(np.min(p_pred_1), np.min(p_exact_1))
-p_max = max(np.max(p_pred_1), np.max(p_exact_1))
-contour(gs[0, 0], x, y, u_pred_1.reshape(num_test_samples, num_test_samples), 'u', u_min, u_max)
-contour(gs[0, 1], x, y, v_pred_1.reshape(num_test_samples, num_test_samples), 'v', v_min, v_max)
-contour(gs[0, 2], x, y, p_pred_1.reshape(num_test_samples, num_test_samples), 'p', p_min, p_max)
-contour(gs[1, 0], x, y, u_exact_1.reshape(num_test_samples, num_test_samples), 'u_gt', u_min, u_max)
-contour(gs[1, 1], x, y, v_exact_1.reshape(num_test_samples, num_test_samples), 'v_gt', v_min, v_max)
-contour(gs[1, 2], x, y, p_exact_1.reshape(num_test_samples, num_test_samples), 'p_gt', p_min, p_max)
-plt.savefig(os.path.join(save_dir, prefix + "_t=1.png"))
+test_nn()
