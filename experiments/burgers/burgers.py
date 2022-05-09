@@ -1,6 +1,4 @@
 """Backend supported: tensorflow.compat.v1, tensorflow, pytorch"""
-import pdb
-
 import deepxde as dde
 import numpy as np
 import os
@@ -14,7 +12,7 @@ from matplotlib.gridspec import GridSpec
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=1000)
+    parser.add_argument("-ep", "--epochs", type=int, default=10000)
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
     parser.add_argument("-rest", "--resample-times", type=int, default=100)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=20)
@@ -41,8 +39,8 @@ def pde(x, y):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker='o', label='Training Loss')
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker='o', label='Testing Loss')
+    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker='o', label='Training Loss', linewidth=3)
+    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker='o', label='Testing Loss', linewidth=3)
     ax.set_xlabel('Epochs')
     ax.set_ylabel('Loss')
     ax.legend(loc='best')
@@ -54,7 +52,7 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend)
+        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
         ax.set_xlabel('Epochs')
         ax.set_ylabel('Testing Loss')
         ax.legend(loc='best')
@@ -87,8 +85,8 @@ def test_nn(test_models=None):
         result_count += 1
     plt.subplot(gs[-1, 0])
     plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_true.reshape(len(t), len(x)), cmap="rainbow")
-    plt.xlabel('t')
-    plt.ylabel('x')
+    plt.xlabel("t")
+    plt.ylabel("x")
     plt.title("u_exact")
     cbar = plt.colorbar(pad=0.05, aspect=10)
     cbar.mappable.set_clim(-1, 1)
