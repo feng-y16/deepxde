@@ -13,10 +13,10 @@ from solver import solve
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=1000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
+    parser.add_argument("-ep", "--epochs", type=int, default=30000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=20000)
     parser.add_argument("-rest", "--resample-times", type=int, default=100)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=300)
     parser.add_argument("-nte", "--num-test-samples", type=int, default=51)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", action="store_true", default=False)
@@ -212,7 +212,7 @@ if not load:
 
     model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=epochs // (resample_times + 1) + 1,
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 2,
                                                                    sample_num=resample_num, sigma=0.2)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:

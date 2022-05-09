@@ -496,7 +496,7 @@ class PDEGradientAccumulativeResampler(Callback):
         self.period = period
         self.sample_num = sample_num
         self.sigma = sigma
-
+        self.sample_count = 0
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
 
@@ -505,8 +505,9 @@ class PDEGradientAccumulativeResampler(Callback):
 
     def on_epoch_end(self):
         self.epochs_since_last_resample += 1
-        if self.epochs_since_last_resample < self.period:
+        if self.epochs_since_last_resample < self.period or self.sample_count == self.sample_num:
             return
+        self.sample_count += 1
         self.epochs_since_last_resample = 0
         y_pred, _ = self.model._outputs_losses(True, self.model.train_state.X_train,
                                                self.model.train_state.y_train,
