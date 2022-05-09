@@ -6,10 +6,8 @@ CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/burgers/burgers.
 CUDA_VISIBLE_DEVICES=5 DDEBACKEND=tensorflow python experiments/burgers/burgers.py --resample >> experiments/burgers/LWIS.log &
 CUDA_VISIBLE_DEVICES=6 DDEBACKEND=tensorflow python experiments/navier_stokes/navier_stokes.py >> experiments/navier_stokes/PINN.log &
 CUDA_VISIBLE_DEVICES=7 DDEBACKEND=tensorflow python experiments/navier_stokes/navier_stokes.py --resample >> experiments/navier_stokes/LWIS.log &
-i=$(jobs | grep -c "")
-while [ $i -le 2 ]
+while [ "$(jobs | grep -c "")" -le 2 ]
 do
 sleep 60
-i=$(jobs | grep -c "")
 done
 bash plot.sh
