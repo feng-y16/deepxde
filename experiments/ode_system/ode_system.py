@@ -13,9 +13,9 @@ from matplotlib.gridspec import GridSpec
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=5000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=20)
-    parser.add_argument("-rest", "--resample-times", type=int, default=20)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=4)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=30)
+    parser.add_argument("-rest", "--resample-times", type=int, default=1)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=10)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
@@ -77,7 +77,9 @@ def test_nn(test_models=None):
     ax2 = plt.subplot(gs[0, 1])
     x = np.linspace(0, 10, 1000)
     y_true = func(x.reshape(-1, 1))
-    line_styles = [":", "--"]
+    ax1.plot(x, y_true[:, 0], label="exact", linewidth=3)
+    ax2.plot(x, y_true[:, 1], label="exact", linewidth=3)
+    line_styles = ["-.", "--"]
     result_count = 0
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(x.reshape(-1, 1))
@@ -88,10 +90,8 @@ def test_nn(test_models=None):
         ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         result_count += 1
-    ax1.plot(x, y_true[:, 0], label="exact", linewidth=3)
     ax1.set_title("u1")
     ax1.legend(loc="best")
-    ax2.plot(x, y_true[:, 1], label="exact", linewidth=3)
     ax2.set_title("u2")
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "figure.png"))
@@ -119,10 +119,10 @@ ic1 = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
 ic2 = dde.icbc.IC(geom, lambda x: 1, boundary, component=1)
 
 if resample:
-    data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain, 2, solution=func, num_test=100)
+    data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain, 2, solution=func, num_test=1000)
 else:
     data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain + resample_times * resample_num,
-                        2, solution=func, num_test=100)
+                        2, solution=func, num_test=1000)
 
 plt.rcParams['font.sans-serif'] = 'Times New Roman'
 plt.rcParams.update({'figure.autolayout': True})
@@ -135,7 +135,7 @@ if len(load) == 0:
     net = dde.nn.FNN(layer_size, activation, initializer)
 
     model = dde.Model(data, net)
-    model.compile("adam", lr=0.001, metrics=["l2 relative error"])
+    model.compile("adam", lr=1e-3, metrics=["l2 relative error"])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 2,
                                                                    sample_num=resample_num, sigma=0.2)
@@ -165,7 +165,7 @@ else:
         loss_history = info["loss_history"]
         train_state = info["train_state"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3)
+        model.compile("adam", lr=1e-3, metrics=["l2 relative error"])
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

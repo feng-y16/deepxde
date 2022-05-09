@@ -23,3 +23,6 @@ dist/
 # Figures
 *.png
 *.pdf
+
+# Logs
+*.log
