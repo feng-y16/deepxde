@@ -14,8 +14,8 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=30000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=2)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=3)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
     parser.add_argument("-nte", "--num-test-samples", type=int, default=51)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
@@ -136,14 +136,14 @@ def test_nn(times=None, test_models=None):
             p_pred = output[:, 2].reshape(-1)
             l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
             l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
-            # l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
+            l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
             residual = np.mean(np.absolute(test_model.predict(X, operator=pde)))
             print(legend)
             print("Accuracy at t = {}:".format(time) + "\\\\")
             print("Mean residual: {:.3f}".format(residual) + "\\\\")
             print("L2 relative error in u: {:.3f}".format(l2_difference_u) + "\\\\")
             print("L2 relative error in v: {:.3f}".format(l2_difference_v) + "\\\\")
-            print("L2 relative error: {:.3f}".format((l2_difference_u + l2_difference_v) / 2))
+            print("L2 relative error in p: {:.3f}".format(l2_difference_p) + "\\\\")
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
                     "u_" + legend, u_min, u_max)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
@@ -156,6 +156,7 @@ def test_nn(times=None, test_models=None):
         contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_exact', p_min, p_max)
         plt.savefig(os.path.join(save_dir, "t={}.png".format(time)))
         plt.savefig(os.path.join(save_dir, "t={}.pdf".format(time)))
+        plt.close()
 
 
 warnings.filterwarnings("ignore")
@@ -169,9 +170,9 @@ num_test_samples = args.num_test_samples
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "PINN"
-else:
     prefix = "LWIS"
+else:
+    prefix = "PINN"
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
@@ -264,4 +265,4 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-test_nn(test_models=models)
+    test_nn(test_models=models)
