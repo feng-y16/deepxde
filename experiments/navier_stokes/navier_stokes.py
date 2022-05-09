@@ -14,12 +14,12 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=30000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=20000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=100)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=300)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=2)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
     parser.add_argument("-nte", "--num-test-samples", type=int, default=51)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
-    parser.add_argument("-l", "--load", action="store_true", default=False)
+    parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
 
@@ -83,6 +83,18 @@ def plot_loss(loss_train, loss_test):
     plt.close()
 
 
+def plot_loss_combined(losses):
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
+    for legend, loss in losses.items():
+        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend)
+        ax.set_xlabel('Epochs')
+        ax.set_ylabel('Testing Loss')
+        ax.legend(loc='best')
+    plt.savefig(os.path.join(save_dir, 'loss.pdf'))
+    plt.savefig(os.path.join(save_dir, 'loss.png'))
+    plt.close()
+
+
 def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
     # plot a contour
     plt.subplot(grid)
@@ -96,7 +108,9 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
     cbar.mappable.set_clim(v_min, v_max)
 
 
-def test_nn(times=None):
+def test_nn(times=None, test_models=None):
+    if test_models is None:
+        test_models = {}
     if times is None:
         times = [0.01, 0.5, 1.0]
     for time in times:
@@ -104,43 +118,44 @@ def test_nn(times=None):
         X = np.vstack((np.ravel(x), np.ravel(y))).T
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
-        output = model.predict(X)
-        u_pred = output[:, 0].reshape(-1)
-        v_pred = output[:, 1].reshape(-1)
-        p_pred = output[:, 2].reshape(-1)
         u_exact, v_exact, p_exact = solve(num_test_samples, 500, time, Re)
-        l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
-        l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
-        # l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
-        residual = np.mean(np.absolute(model.predict(X, operator=pde)))
-        print("Accuracy at t = {}:".format(time) + "\\\\")
-        print("Mean residual: {:.3f}".format(residual) + "\\\\")
-        print("L2 relative error in u: {:.3f}".format(l2_difference_u) + "\\\\")
-        print("L2 relative error in v: {:.3f}".format(l2_difference_v) + "\\\\")
-        print("L2 relative error: {:.3f}".format((l2_difference_u + l2_difference_v) / 2))
-
-        plt.figure(figsize=(12, 9))
-        gs = GridSpec(3, 3)
+        num_results = len(models) + 1
+        plt.figure(figsize=(12, 3 * num_results))
+        gs = GridSpec(num_results, 3)
         u_min = np.min(u_exact)
         u_max = np.max(u_exact)
         v_min = np.min(v_exact)
         v_max = np.max(v_exact)
         p_min = np.min(p_exact)
         p_max = np.max(p_exact)
-        contour(gs[0, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples), 'u_pred', u_min, u_max)
-        contour(gs[0, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples), 'v_pred', v_min, v_max)
-        contour(gs[0, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples), 'p_pred', p_min, p_max)
-        contour(gs[1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u_exact', u_min, u_max)
-        contour(gs[1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v_exact', v_min, v_max)
-        contour(gs[1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_exact', p_min, p_max)
-        error_u = np.abs(u_pred - u_exact) / (np.abs(u_exact) + 1e-6)
-        error_v = np.abs(v_pred - v_exact) / (np.abs(v_exact) + 1e-6)
-        error_p = np.abs(p_pred - p_exact) / (np.abs(p_exact) + 1e-6)
-        contour(gs[2, 0], x, y, error_u.reshape(num_test_samples, num_test_samples), 'u_error', 0, 1)
-        contour(gs[2, 1], x, y, error_v.reshape(num_test_samples, num_test_samples), 'v_error', 0, 1)
-        contour(gs[2, 2], x, y, error_p.reshape(num_test_samples, num_test_samples), 'p_error', 0, 1)
-        plt.savefig(os.path.join(save_dir, prefix + "_t={}.png".format(time)))
-        plt.savefig(os.path.join(save_dir, prefix + "_t={}.pdf".format(time)))
+        result_count = 0
+        for legend, test_model in test_models.items():
+            output = test_model.predict(X)
+            u_pred = output[:, 0].reshape(-1)
+            v_pred = output[:, 1].reshape(-1)
+            p_pred = output[:, 2].reshape(-1)
+            l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
+            l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
+            # l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
+            residual = np.mean(np.absolute(test_model.predict(X, operator=pde)))
+            print(legend)
+            print("Accuracy at t = {}:".format(time) + "\\\\")
+            print("Mean residual: {:.3f}".format(residual) + "\\\\")
+            print("L2 relative error in u: {:.3f}".format(l2_difference_u) + "\\\\")
+            print("L2 relative error in v: {:.3f}".format(l2_difference_v) + "\\\\")
+            print("L2 relative error: {:.3f}".format((l2_difference_u + l2_difference_v) / 2))
+            contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
+                    "u_" + legend, u_min, u_max)
+            contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
+                    "v_" + legend, v_min, v_max)
+            contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
+                    "p_" + legend, p_min, p_max)
+            result_count += 1
+        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u_exact', u_min, u_max)
+        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v_exact', v_min, v_max)
+        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_exact', p_min, p_max)
+        plt.savefig(os.path.join(save_dir, "t={}.png".format(time)))
+        plt.savefig(os.path.join(save_dir, "t={}.pdf".format(time)))
 
 
 warnings.filterwarnings("ignore")
@@ -154,9 +169,9 @@ num_test_samples = args.num_test_samples
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "ag"
+    prefix = "PINN"
 else:
-    prefix = "norm"
+    prefix = "LWIS"
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
@@ -187,7 +202,7 @@ if resample:
         num_domain=num_train_samples_domain,
         num_boundary=5000,
         num_initial=5000,
-        num_test=10000,
+        num_test=100000,
     )
 else:
     data = dde.data.TimePDE(
@@ -202,10 +217,15 @@ else:
         num_domain=num_train_samples_domain + resample_times * resample_num,
         num_boundary=5000,
         num_initial=5000,
-        num_test=10000,
+        num_test=100000,
     )
 
-if not load:
+
+plt.rcParams['font.sans-serif'] = 'Times New Roman'
+plt.rcParams.update({'figure.autolayout': True})
+plt.rc('font', size=18)
+models = {}
+if len(load) == 0:
     net = dde.nn.FNN([3] + 4 * [50] + [3], "tanh", "Glorot normal")
 
     model = dde.Model(data, net)
@@ -222,23 +242,26 @@ if not load:
             "loss_history": loss_history, "train_state": train_state}
     with open(os.path.join(save_dir, prefix + "_info.pkl"), "wb") as f:
         pickle.dump(info, f)
+    models[prefix] = model
+    load = [prefix]
+    plot_loss(np.array(loss_history.loss_train).sum(axis=1), np.array(loss_history.loss_test).sum(axis=1))
 else:
-    with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
-        info = pickle.load(f)
-    net = info["net"]
-    data.train_x_all = info["train_x_all"]
-    data.train_x = info["train_x"]
-    data.train_x_bc = info["train_x_bc"]
-    data.train_y = info["train_y"]
-    data.test_x = info["test_x"]
-    data.test_y = info["test_y"]
-    loss_history = info["loss_history"]
-    train_state = info["train_state"]
-    model = dde.Model(data, net)
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
-
-plt.rcParams['font.sans-serif'] = 'Times New Roman'
-plt.rcParams.update({'figure.autolayout': True})
-plt.rc('font', size=18)
-test_nn()
-plot_loss(np.array(loss_history.loss_train).sum(axis=1), np.array(loss_history.loss_test).sum(axis=1))
+    losses_test = {}
+    for prefix in load:
+        with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
+            info = pickle.load(f)
+        net = info["net"]
+        data.train_x_all = info["train_x_all"]
+        data.train_x = info["train_x"]
+        data.train_x_bc = info["train_x_bc"]
+        data.train_y = info["train_y"]
+        data.test_x = info["test_x"]
+        data.test_y = info["test_y"]
+        loss_history = info["loss_history"]
+        train_state = info["train_state"]
+        model = dde.Model(data, net)
+        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
+        models[prefix] = model
+        losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
+    plot_loss_combined(losses_test)
+test_nn(test_models=models)
