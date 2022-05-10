@@ -118,7 +118,7 @@ def test_nn(times=None, test_models=None):
         X = np.vstack((np.ravel(x), np.ravel(y))).T
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
-        u_exact, v_exact, p_exact = solve(num_test_samples, 500, time, Re)
+        u_exact, v_exact, p_exact = solve(num_test_samples, 10000, time, Re)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)

@@ -139,7 +139,7 @@ N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
 
-def solve(n_points=1000, n_iterations=2000, time_length=1, re=100):
+def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
     time_step_length = time_length / n_iterations
     if time_length == 0:
         n_iterations = 0
