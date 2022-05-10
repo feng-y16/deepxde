@@ -13,6 +13,6 @@ while [ "$num_jobs" -ge 1 ]
 do
   echo num_jobs $num_jobs
   num_jobs=$(jobs | grep -c "")
-  sleep 60
+  sleep 10
 done
 bash draw.sh
