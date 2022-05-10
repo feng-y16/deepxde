@@ -16,3 +16,4 @@ do
   sleep 10
 done
 bash draw.sh
+echo "done"

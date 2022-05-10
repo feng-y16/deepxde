@@ -15,3 +15,4 @@ do
   sleep 10
 done
 CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS >> experiments/"$exp_name"/draw.txt &
+echo "done"
