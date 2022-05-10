@@ -2,6 +2,7 @@
 import deepxde as dde
 import numpy as np
 import os
+import sys
 import argparse
 import warnings
 import pickle
@@ -112,7 +113,10 @@ def test_nn(times=None, test_models=None):
     if test_models is None:
         test_models = {}
     if times is None:
-        times = [0.01, 0.5, 1.0]
+        times = [0.5, 1.0]
+    test_models_pred_exact = {}
+    for legend, test_model in test_models.items():
+        test_models_pred_exact[legend] = [None, None, None, None, None, None]
     for time in times:
         x, y = np.meshgrid(np.linspace(0, 1, num_test_samples), np.linspace(0, 1, num_test_samples))
         X = np.vstack((np.ravel(x), np.ravel(y))).T
@@ -137,13 +141,26 @@ def test_nn(times=None, test_models=None):
             l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
             l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
             l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
+            if test_models_pred_exact[legend][0] is None:
+                test_models_pred_exact[legend][0] = u_pred
+                test_models_pred_exact[legend][1] = v_pred
+                test_models_pred_exact[legend][2] = p_pred
+                test_models_pred_exact[legend][3] = u_exact
+                test_models_pred_exact[legend][4] = v_exact
+                test_models_pred_exact[legend][5] = p_exact
+            else:
+                test_models_pred_exact[legend][0] = np.concatenate((test_models_pred_exact[legend][0], u_pred))
+                test_models_pred_exact[legend][1] = np.concatenate((test_models_pred_exact[legend][1], v_pred))
+                test_models_pred_exact[legend][2] = np.concatenate((test_models_pred_exact[legend][2], p_pred))
+                test_models_pred_exact[legend][3] = np.concatenate((test_models_pred_exact[legend][3], u_exact))
+                test_models_pred_exact[legend][4] = np.concatenate((test_models_pred_exact[legend][4], v_exact))
+                test_models_pred_exact[legend][5] = np.concatenate((test_models_pred_exact[legend][5], p_exact))
             residual = np.mean(np.absolute(test_model.predict(X, operator=pde)))
             print(legend)
-            print("Accuracy at t = {}:".format(time) + "\\\\")
-            print("Mean residual: {:.3f}".format(residual) + "\\\\")
-            print("L2 relative error in u: {:.3f}".format(l2_difference_u) + "\\\\")
-            print("L2 relative error in v: {:.3f}".format(l2_difference_v) + "\\\\")
-            print("L2 relative error in p: {:.3f}".format(l2_difference_p) + "\\\\")
+            print("Accuracy at t = {}:".format(time))
+            print("Mean residual: {:.3f}".format(residual))
+            print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
+                  .format(l2_difference_u, l2_difference_v, l2_difference_p))
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
                     "u_" + legend, u_min, u_max)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
@@ -157,6 +174,15 @@ def test_nn(times=None, test_models=None):
         plt.savefig(os.path.join(save_dir, "t={}.png".format(time)))
         plt.savefig(os.path.join(save_dir, "t={}.pdf".format(time)))
         plt.close()
+
+    for legend, pred_true in test_models_pred_exact.items():
+        u_pred, v_pred, p_pred, u_exact, v_exact, p_exact = pred_true
+        l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
+        l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
+        l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
+        print(legend)
+        print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
+              .format(l2_difference_u, l2_difference_v, l2_difference_p))
 
 
 warnings.filterwarnings("ignore")
@@ -266,3 +292,4 @@ else:
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
     test_nn(test_models=models)
+    print("draw complete", file=sys.stderr)

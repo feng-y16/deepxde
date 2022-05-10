@@ -2,6 +2,7 @@
 import deepxde as dde
 import numpy as np
 import os
+import sys
 import argparse
 import warnings
 import pickle
@@ -76,23 +77,25 @@ def test_nn(test_models=None):
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
     x = np.linspace(0, 10, 1000)
-    y_true = func(x.reshape(-1, 1))
-    ax1.plot(x, y_true[:, 0], label="exact", linewidth=3)
-    ax2.plot(x, y_true[:, 1], label="exact", linewidth=3)
+    y_exact = func(x.reshape(-1, 1))
+    ax1.plot(x, y_exact[:, 0], label="exact", linewidth=3)
+    ax2.plot(x, y_exact[:, 1], label="exact", linewidth=3)
     line_styles = ["-.", "--"]
     result_count = 0
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(x.reshape(-1, 1))
         pde_pred = test_model.predict(x.reshape(-1, 1), operator=ode_system)
+        l2_difference_u = dde.metrics.l2_relative_error(y_exact[:, 0], y_pred[:, 0])
+        l2_difference_v = dde.metrics.l2_relative_error(y_exact[:, 1], y_pred[:, 1])
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error:", dde.metrics.l2_relative_error(y_true, y_pred))
+        print("L2 relative error in u, v: {:.3f} & {:.3f}".format(l2_difference_u, l2_difference_v))
         ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         result_count += 1
-    ax1.set_title("u1")
+    ax1.set_title("u")
     ax1.legend(loc="best")
-    ax2.set_title("u2")
+    ax2.set_title("v")
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "figure.png"))
     plt.savefig(os.path.join(save_dir, "figure.pdf"))
@@ -170,3 +173,4 @@ else:
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
     test_nn(test_models=models)
+    print("draw complete", file=sys.stderr)

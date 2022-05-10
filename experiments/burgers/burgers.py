@@ -2,6 +2,7 @@
 import deepxde as dde
 import numpy as np
 import os
+import sys
 import argparse
 import warnings
 import pickle
@@ -67,14 +68,14 @@ def test_nn(test_models=None):
     num_results = len(models) + 1
     plt.figure(figsize=(12, 3 * num_results))
     gs = GridSpec(num_results, 1)
-    X, y_true, t, x = gen_testdata()
+    X, y_exact, t, x = gen_testdata()
     result_count = 0
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
         pde_pred = test_model.predict(X, operator=pde)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error:", dde.metrics.l2_relative_error(y_true, y_pred))
+        print("L2 relative error:", dde.metrics.l2_relative_error(y_exact, y_pred))
         plt.subplot(gs[result_count, 0])
         plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)), cmap="rainbow")
         plt.xlabel("t")
@@ -84,7 +85,7 @@ def test_nn(test_models=None):
         cbar.mappable.set_clim(-1, 1)
         result_count += 1
     plt.subplot(gs[-1, 0])
-    plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_true.reshape(len(t), len(x)), cmap="rainbow")
+    plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
     plt.xlabel("t")
     plt.ylabel("x")
     plt.title("u_exact")
@@ -172,3 +173,4 @@ else:
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
     test_nn(test_models=models)
+    print("draw complete", file=sys.stderr)
