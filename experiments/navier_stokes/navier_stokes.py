@@ -74,13 +74,13 @@ def v_func(x):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker='o', label='Training Loss', linewidth=3)
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker='o', label='Testing Loss', linewidth=3)
-    ax.set_xlabel('Epochs')
-    ax.set_ylabel('Loss')
-    ax.legend(loc='best')
-    plt.savefig(os.path.join(save_dir, prefix + '_loss.pdf'))
-    plt.savefig(os.path.join(save_dir, prefix + '_loss.png'))
+    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
+    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Loss")
+    ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, prefix + "_loss.pdf"))
+    plt.savefig(os.path.join(save_dir, prefix + "_loss.png"))
     plt.close()
 
 
@@ -88,11 +88,11 @@ def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
         ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
-        ax.set_xlabel('Epochs')
-        ax.set_ylabel('Testing Loss')
-        ax.legend(loc='best')
-    plt.savefig(os.path.join(save_dir, 'loss.pdf'))
-    plt.savefig(os.path.join(save_dir, 'loss.png'))
+        ax.set_xlabel("Epochs")
+        ax.set_ylabel("Testing Loss")
+        ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "loss.pdf"))
+    plt.savefig(os.path.join(save_dir, "loss.png"))
     plt.close()
 
 

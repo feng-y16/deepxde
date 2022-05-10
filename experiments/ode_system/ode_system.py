@@ -47,13 +47,13 @@ def func(x):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker='o', label='Training Loss', linewidth=3)
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker='o', label='Testing Loss', linewidth=3)
-    ax.set_xlabel('Epochs')
-    ax.set_ylabel('Loss')
-    ax.legend(loc='best')
-    plt.savefig(os.path.join(save_dir, prefix + '_loss.pdf'))
-    plt.savefig(os.path.join(save_dir, prefix + '_loss.png'))
+    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
+    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Loss")
+    ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, prefix + "_loss.pdf"))
+    plt.savefig(os.path.join(save_dir, prefix + "_loss.png"))
     plt.close()
 
 
@@ -61,11 +61,11 @@ def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
         ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
-        ax.set_xlabel('Epochs')
-        ax.set_ylabel('Testing Loss')
-        ax.legend(loc='best')
-    plt.savefig(os.path.join(save_dir, 'loss.pdf'))
-    plt.savefig(os.path.join(save_dir, 'loss.png'))
+        ax.set_xlabel("Epochs")
+        ax.set_ylabel("Testing Loss")
+        ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "loss.pdf"))
+    plt.savefig(os.path.join(save_dir, "loss.png"))
     plt.close()
 
 
@@ -93,8 +93,10 @@ def test_nn(test_models=None):
         ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
         result_count += 1
+    ax1.set_xlabel("t")
     ax1.set_title("u")
     ax1.legend(loc="best")
+    ax2.set_xlabel("t")
     ax2.set_title("v")
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "figure.png"))
