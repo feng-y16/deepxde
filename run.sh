@@ -10,7 +10,7 @@ CUDA_VISIBLE_DEVICES=5 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$ex
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
-  echo num_jobs $num_jobs
+  jobs
   num_jobs=$(jobs | grep -c "")
   sleep 10
 done

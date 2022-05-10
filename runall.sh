@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=7 DDEBACKEND=tensorflow python experiments/navier_stokes/na
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
-  echo num_jobs $num_jobs
+  jobs
   num_jobs=$(jobs | grep -c "")
   sleep 10
 done
