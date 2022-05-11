@@ -21,15 +21,15 @@ def parse_args():
     parser.add_argument("-nte", "--num-test-samples", type=int, default=101)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
+    parser.add_argument("--re", type=float, default=100)
     return parser.parse_known_args()[0]
 
 
 a = 1
 d = 1
-Re = 100
 
 
-def pde(x, u):
+def pde_re(re, x, u):
     u_vel, v_vel, p = u[:, 0:1], u[:, 1:2], u[:, 2:3]
 
     u_vel_x = dde.grad.jacobian(u, x, i=0, j=0)
@@ -48,16 +48,16 @@ def pde(x, u):
     p_y = dde.grad.jacobian(u, x, i=2, j=1)
 
     momentum_x = (
-        u_vel_t
-        + (u_vel * u_vel_x + v_vel * u_vel_y)
-        + p_x
-        - 1 / Re * (u_vel_xx + u_vel_yy)
+            u_vel_t
+            + (u_vel * u_vel_x + v_vel * u_vel_y)
+            + p_x
+            - 1 / re * (u_vel_xx + u_vel_yy)
     )
     momentum_y = (
-        v_vel_t
-        + (u_vel * v_vel_x + v_vel * v_vel_y)
-        + p_y
-        - 1 / Re * (v_vel_xx + v_vel_yy)
+            v_vel_t
+            + (u_vel * v_vel_x + v_vel * v_vel_y)
+            + p_y
+            - 1 / re * (v_vel_xx + v_vel_yy)
     )
     continuity = u_vel_x + v_vel_y
 
@@ -87,12 +87,12 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
+        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "loss.pdf"))
-    plt.savefig(os.path.join(save_dir, "loss.png"))
+    plt.savefig(os.path.join(save_dir, str(Re) + "_loss.pdf"))
+    plt.savefig(os.path.join(save_dir, str(Re) + "_loss.png"))
     plt.close()
 
 
@@ -123,6 +123,7 @@ def test_nn(times=None, test_models=None):
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
         u_exact, v_exact, p_exact = solve(num_test_samples, 10000, time, Re)
+        p_exact -= np.mean(p_exact)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
@@ -138,6 +139,7 @@ def test_nn(times=None, test_models=None):
             u_pred = output[:, 0].reshape(-1)
             v_pred = output[:, 1].reshape(-1)
             p_pred = output[:, 2].reshape(-1)
+            p_pred -= np.mean(p_pred)
             l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
             l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
             l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
@@ -162,17 +164,17 @@ def test_nn(times=None, test_models=None):
             print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
                   .format(l2_difference_u, l2_difference_v, l2_difference_p))
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u_" + legend, u_min, u_max)
+                    "u_" + legend[:4], u_min, u_max)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v_" + legend, v_min, v_max)
+                    "v_" + legend[:4], v_min, v_max)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p_" + legend, p_min, p_max)
+                    "p_" + legend[:4], p_min, p_max)
             result_count += 1
         contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u_exact', u_min, u_max)
         contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v_exact', v_min, v_max)
         contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_exact', p_min, p_max)
-        plt.savefig(os.path.join(save_dir, "t={}.png".format(time)))
-        plt.savefig(os.path.join(save_dir, "t={}.pdf".format(time)))
+        plt.savefig(os.path.join(save_dir, "Re={}_t={}.png".format(Re, time)))
+        plt.savefig(os.path.join(save_dir, "Re={}_t={}.pdf".format(Re, time)))
         plt.close()
 
     for legend, pred_true in test_models_pred_exact.items():
@@ -194,11 +196,18 @@ epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
 num_test_samples = args.num_test_samples
 load = args.load
+Re = args.re
+
+
+def pde(x, u):
+    return pde_re(Re, x, u)
+
+
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "LWIS"
+    prefix = "LWIS_" + str(Re)
 else:
-    prefix = "PINN"
+    prefix = "PINN_" + str(Re)
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
@@ -246,7 +255,6 @@ else:
         num_initial=5000,
         num_test=100000,
     )
-
 
 plt.rcParams['font.sans-serif'] = 'Times New Roman'
 plt.rcParams.update({'figure.autolayout': True})

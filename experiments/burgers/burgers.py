@@ -112,7 +112,7 @@ print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
 geom = dde.geometry.Interval(-1, 1)
-timedomain = dde.geometry.TimeDomain(0, 0.99)
+timedomain = dde.geometry.TimeDomain(0, 1.0)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
 bc = dde.icbc.DirichletBC(geomtime, lambda x: 0, lambda _, on_boundary: on_boundary)
@@ -141,7 +141,7 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3)
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sigma=1.0)
+                                                                   sample_num=resample_num, sigma=1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)
