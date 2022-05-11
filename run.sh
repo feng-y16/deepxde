@@ -2,8 +2,8 @@
 exp_name=$1
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
-  CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py > experiments/"$exp_name"/PINN.txt &
-  CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample > experiments/"$exp_name"/LWIS.txt &
+  CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 100 > experiments/"$exp_name"/PINN_100.txt &
+  CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample --re 100 > experiments/"$exp_name"/LWIS_100.txt &
   CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 200 > experiments/"$exp_name"/PINN_200.txt &
   CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample --re 200 > experiments/"$exp_name"/LWIS_200.txt &
   CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 500 > experiments/"$exp_name"/PINN_500.txt &
@@ -19,5 +19,5 @@ do
   num_jobs=$(jobs | grep -c "")
   sleep 10
 done
-CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS > experiments/"$exp_name"/draw.txt &
+bash draw.sh "$exp_name" &
 echo "bash complete"
