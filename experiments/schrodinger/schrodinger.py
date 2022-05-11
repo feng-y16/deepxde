@@ -44,7 +44,7 @@ def pde_d(dimension, x, y):
     for i in range(dimension):
         psi_x += tf.sin(x[i:(i + 1)]) ** 2 / dimension ** 2 - tf.cos(x[i:(i + 1)]) / dimension
     psi_x -= 3
-    return laplace - y ** 3 - psi_x * y + 3 * y
+    return laplace - y ** 3 - psi_x * y - 3 * y
 
 
 def func_d(dimension, x):
