@@ -1,5 +1,5 @@
 #!/bin/bash
-bash clean.sh
+bash cleanall.sh
 CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/ode_system/ode_system.py > experiments/ode_system/PINN.txt &
 CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/ode_system/ode_system.py --resample > experiments/ode_system/LWIS.txt &
 CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/schrodinger/schrodinger.py > experiments/schrodinger/PINN.txt &

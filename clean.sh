@@ -1,6 +1,7 @@
 #!/bin/bash
-rm -rf experiments/*/*.pkl
-rm -rf experiments/*/*.png
-rm -rf experiments/*/*.pdf
-rm -rf experiments/*/*.txt
-rm -rf experiments/*/*.log
+exp_name=$1
+rm -rf experiments/"$exp_name"/*.pkl
+rm -rf experiments/"$exp_name"/*.png
+rm -rf experiments/"$exp_name"/*.pdf
+rm -rf experiments/"$exp_name"/*.txt
+rm -rf experiments/"$exp_name"/*.log

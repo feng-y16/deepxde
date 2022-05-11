@@ -1,10 +1,6 @@
 #!/bin/bash
 exp_name=$1
-rm -rf experiments/"$exp_name"/*.pkl
-rm -rf experiments/"$exp_name"/*.png
-rm -rf experiments/"$exp_name"/*.pdf
-rm -rf experiments/"$exp_name"/*.txt
-rm -rf experiments/"$exp_name"/*.log
+bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py > experiments/"$exp_name"/PINN.txt &
   CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample > experiments/"$exp_name"/LWIS.txt &
