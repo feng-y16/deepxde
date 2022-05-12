@@ -91,8 +91,8 @@ def plot_loss_combined(losses):
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, str(Re) + "_loss.pdf"))
-    plt.savefig(os.path.join(save_dir, str(Re) + "_loss.png"))
+    plt.savefig(os.path.join(save_dir, "loss_{}.pdf".format(Re)))
+    plt.savefig(os.path.join(save_dir, "loss_{}.png".format(Re)))
     plt.close()
 
 
