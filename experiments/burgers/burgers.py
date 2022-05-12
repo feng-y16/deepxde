@@ -75,7 +75,7 @@ def test_nn(test_models=None):
         pde_pred = test_model.predict(X, operator=pde)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error:", dde.metrics.l2_relative_error(y_exact, y_pred))
+        print("L2 relative error: {:.3f}".format(dde.metrics.l2_relative_error(y_exact, y_pred)))
         plt.subplot(gs[result_count, 0])
         plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)), cmap="rainbow")
         plt.xlabel("t")

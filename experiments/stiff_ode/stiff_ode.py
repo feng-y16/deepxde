@@ -9,28 +9,29 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
+import tensorflow as tf
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=6000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=30)
-    parser.add_argument("-rest", "--resample-times", type=int, default=1)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=10)
+    parser.add_argument("-ep", "--epochs", type=int, default=20000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=75)
+    parser.add_argument("-rest", "--resample-times", type=int, default=5)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=5)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
 
+r = 100
+
+
 def ode_system(x, y):
     """ODE system.
-    dy1/dx = y2
-    dy2/dx = -y1
+    dy/dx = -ry+3r-2rexp(-t)
     """
-    y1, y2 = y[:, 0:1], y[:, 1:]
-    dy1_x = dde.grad.jacobian(y, x, i=0)
-    dy2_x = dde.grad.jacobian(y, x, i=1)
-    return [dy1_x - y2, dy2_x + y1]
+    dy_x = dde.grad.jacobian(y, x, i=0)
+    return [dy_x + r * y - 3 * r + 2 * r * tf.exp(-x)]
 
 
 def boundary(_, on_initial):
@@ -38,11 +39,7 @@ def boundary(_, on_initial):
 
 
 def func(x):
-    """
-    y1 = sin(x)
-    y2 = cos(x)
-    """
-    return np.hstack((np.sin(x), np.cos(x)))
+    return 3 + (2 * r / (r - 1) - 3) * np.exp(-r * x) - 2 * r / (r - 1) * np.exp(-x)
 
 
 def plot_loss(loss_train, loss_test):
@@ -76,28 +73,28 @@ def test_nn(test_models=None):
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
-    x = np.linspace(0, 10, 1000)
+    x = np.linspace(0, 1, 1000)
     y_exact = func(x.reshape(-1, 1))
-    ax1.plot(x, y_exact[:, 0], label="exact", linewidth=3)
-    ax2.plot(x, y_exact[:, 1], label="exact", linewidth=3)
-    line_styles = ["-.", "--"]
+    ax1.plot(x, y_exact, label="exact", linewidth=3)
+    ax2.plot(x, y_exact, label="exact", linewidth=3)
     result_count = 0
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(x.reshape(-1, 1))
         pde_pred = test_model.predict(x.reshape(-1, 1), operator=ode_system)
-        l2_difference_u = dde.metrics.l2_relative_error(y_exact[:, 0], y_pred[:, 0])
-        l2_difference_v = dde.metrics.l2_relative_error(y_exact[:, 1], y_pred[:, 1])
+        l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error in u, v: {:.3f} & {:.3f}".format(l2_difference_u, l2_difference_v))
-        ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
-        ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle=line_styles[result_count % 2])
+        print("L2 relative error in u: {:.3f}".format(l2_difference_u))
+        if result_count % 2 == 0:
+            ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle="--")
+        else:
+            ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle="--")
         result_count += 1
     ax1.set_xlabel("t")
     ax1.set_title("u")
     ax1.legend(loc="best")
     ax2.set_xlabel("t")
-    ax2.set_title("v")
+    ax2.set_title("u")
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "figure.png"))
     plt.savefig(os.path.join(save_dir, "figure.pdf"))
@@ -119,15 +116,14 @@ if resample:
 else:
     prefix = "PINN"
 
-geom = dde.geometry.TimeDomain(0, 10)
-ic1 = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
-ic2 = dde.icbc.IC(geom, lambda x: 1, boundary, component=1)
+geom = dde.geometry.TimeDomain(0, 1)
+ic = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
 
 if resample:
-    data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain, 2, solution=func, num_test=1000)
+    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 1, solution=func, num_test=1000)
 else:
-    data = dde.data.PDE(geom, ode_system, [ic1, ic2], num_train_samples_domain + resample_times * resample_num,
-                        2, solution=func, num_test=1000)
+    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain + resample_times * resample_num,
+                        1, solution=func, num_test=1000)
 
 plt.rcParams['font.sans-serif'] = 'Times New Roman'
 plt.rcParams.update({'figure.autolayout': True})
@@ -140,10 +136,10 @@ if len(load) == 0:
     net = dde.nn.FNN(layer_size, activation, initializer)
 
     model = dde.Model(data, net)
-    model.compile("adam", lr=1e-3, metrics=["l2 relative error"])
+    model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=[1, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sigma=1)
+                                                                   sample_num=resample_num, sigma=1.0)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)
@@ -170,7 +166,7 @@ else:
         loss_history = info["loss_history"]
         train_state = info["train_state"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, metrics=["l2 relative error"])
+        model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=[1, 100])
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

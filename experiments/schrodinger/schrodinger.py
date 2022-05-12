@@ -90,7 +90,7 @@ def test_nn(test_models=None):
         pde_pred = test_model.predict(X, operator=pde)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error:", dde.metrics.l2_relative_error(y_exact, y_pred))
+        print("L2 relative error: {:.3f}".format(dde.metrics.l2_relative_error(y_exact, y_pred)))
 
 
 warnings.filterwarnings("ignore")
