@@ -20,4 +20,5 @@ do
   sleep 10
 done
 bash draw_all.sh
+bash run_sensitivity.sh
 echo "bash complete"

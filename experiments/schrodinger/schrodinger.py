@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
+    parser.add_argument("--sigma", type=float, default=1)
     return parser.parse_known_args()[0]
 
 
@@ -80,17 +81,62 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def test_nn(test_models=None):
+def test_nn(test_models=None, losses=None):
     if test_models is None:
         test_models = {}
+    if losses is None:
+        losses = {}
     X = test_models["PINN"].data.test_x
     y_exact = func(X)
+    PINN_errors = dict()
+    LWIS_errors = dict()
+    PINN_losses = dict()
+    LWIS_losses = dict()
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
         pde_pred = test_model.predict(X, operator=pde)
+        l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error: {:.3f}".format(dde.metrics.l2_relative_error(y_exact, y_pred)))
+        print("L2 relative error: {:.3f}".format(l2_difference_u))
+        parsed_legend = legend.split("_")
+        if parsed_legend[0] == "PINN":
+            num_samples = int(parsed_legend[1])
+            PINN_errors[num_samples] = l2_difference_u
+            PINN_losses[num_samples] = losses[legend]
+        else:
+            num_samples = int(parsed_legend[1])
+            LWIS_sigma = float(parsed_legend[2])
+            if LWIS_sigma not in LWIS_results.keys():
+                LWIS_errors[LWIS_sigma] = dict()
+            LWIS_errors[LWIS_sigma][num_samples] = l2_difference_u
+            if num_samples not in LWIS_results.keys():
+                LWIS_losses[num_samples] = dict()
+            LWIS_losses[num_samples][LWIS_sigma] = losses[legend]
+    plt.figure(figsize=(12, 4))
+    gs = GridSpec(1, 2)
+    ax1 = plt.subplot(gs[0, 0])
+    ax2 = plt.subplot(gs[0, 1])
+    num_samples_for_loss = 30000
+    PINN_loss = PINN_losses[num_samples_for_loss]
+    ax1.semilogy(1000 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
+    for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
+        ax1.semilogy(1000 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+                     label="LWIS-sigma={:.1f}".format(LWIS_sigma), linewidth=3)
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Testing Loss")
+    ax1.legend(loc="best")
+
+    ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
+    for LWIS_sigma, LWIS_error in LWIS_errors.items():
+        ax2.semilogy(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o",
+                     label="LWIS-sigma={:.1f}".format(LWIS_sigma), linewidth=3)
+    ax2.set_xlabel("Number of Training Samples")
+    ax2.set_ylabel("L2 Relative Error")
+    ax2.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
+    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+    plt.close()
 
 
 warnings.filterwarnings("ignore")
@@ -100,8 +146,11 @@ resample_times = args.resample_times
 resample_num = args.resample_numbers
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
+num_resample_train_samples_domain = resample_times * resample_num
+num_all_train_samples_domain = num_train_samples_domain + num_resample_train_samples_domain
 load = args.load
 d = args.dimension
+sigma = args.sigma
 
 
 def pde(x, y):
@@ -114,9 +163,9 @@ def func(x):
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "LWIS"
+    prefix = "LWIS_{:}_{:}".format(num_all_train_samples_domain, num_resample_train_samples_domain)
 else:
-    prefix = "PINN"
+    prefix = "PINN_{:}".format(num_all_train_samples_domain)
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
@@ -141,7 +190,7 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, loss_weights=[1, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sigma=1)
+                                                                   sample_num=resample_num, sigma=sigma)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)
@@ -172,5 +221,5 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models)
+    test_nn(test_models=models, losses_test=losses_test)
     print("draw complete", file=sys.stderr)
