@@ -86,7 +86,7 @@ def test_nn(test_models=None, losses=None):
         test_models = {}
     if losses is None:
         losses = {}
-    X = test_models["PINN"].data.test_x
+    X = test_models[list(test_models.keys())[0]].data.test_x
     y_exact = func(X)
     PINN_errors = dict()
     LWIS_errors = dict()
@@ -100,6 +100,8 @@ def test_nn(test_models=None, losses=None):
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(l2_difference_u))
         parsed_legend = legend.split("_")
+        if int(parsed_legend[1]) == 60000:
+            continue
         if parsed_legend[0] == "PINN":
             num_samples = int(parsed_legend[1])
             PINN_errors[num_samples] = l2_difference_u
@@ -107,10 +109,10 @@ def test_nn(test_models=None, losses=None):
         else:
             num_samples = int(parsed_legend[1])
             LWIS_sigma = float(parsed_legend[2])
-            if LWIS_sigma not in LWIS_results.keys():
+            if LWIS_sigma not in LWIS_errors.keys():
                 LWIS_errors[LWIS_sigma] = dict()
             LWIS_errors[LWIS_sigma][num_samples] = l2_difference_u
-            if num_samples not in LWIS_results.keys():
+            if num_samples not in LWIS_losses.keys():
                 LWIS_losses[num_samples] = dict()
             LWIS_losses[num_samples][LWIS_sigma] = losses[legend]
     plt.figure(figsize=(12, 4))
@@ -129,7 +131,7 @@ def test_nn(test_models=None, losses=None):
 
     ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_error in LWIS_errors.items():
-        ax2.semilogy(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o",
+        ax2.plot(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                      label="LWIS-sigma={:.1f}".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
     ax2.set_ylabel("L2 Relative Error")
@@ -221,5 +223,5 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models, losses_test=losses_test)
+    test_nn(test_models=models, losses=losses_test)
     print("draw complete", file=sys.stderr)
