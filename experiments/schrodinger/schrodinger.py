@@ -163,7 +163,7 @@ def func(x):
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "LWIS_{:}_{:}".format(num_all_train_samples_domain, num_resample_train_samples_domain)
+    prefix = "LWIS_{:}_{:}".format(num_all_train_samples_domain, sigma)
 else:
     prefix = "PINN_{:}".format(num_all_train_samples_domain)
 print("resample:", resample)
