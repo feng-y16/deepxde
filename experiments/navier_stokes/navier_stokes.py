@@ -164,15 +164,15 @@ def test_nn(times=None, test_models=None):
             print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
                   .format(l2_difference_u, l2_difference_v, l2_difference_p))
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u_" + legend[:4], u_min, u_max)
+                    "u-" + legend[:4], u_min, u_max)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v_" + legend[:4], v_min, v_max)
+                    "v-" + legend[:4], v_min, v_max)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p_" + legend[:4], p_min, p_max)
+                    "p-" + legend[:4], p_min, p_max)
             result_count += 1
-        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u_exact', u_min, u_max)
-        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v_exact', v_min, v_max)
-        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p_exact', p_min, p_max)
+        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max)
+        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max)
+        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p-exact', p_min, p_max)
         plt.savefig(os.path.join(save_dir, "Re={}_t={}.png".format(Re, time)))
         plt.savefig(os.path.join(save_dir, "Re={}_t={}.pdf".format(Re, time)))
         plt.close()
@@ -256,9 +256,10 @@ else:
         num_test=100000,
     )
 
-plt.rcParams['font.sans-serif'] = 'Times New Roman'
-plt.rcParams.update({'figure.autolayout': True})
-plt.rc('font', size=18)
+plt.rcParams["font.sans-serif"] = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "stix"
+plt.rcParams.update({"figure.autolayout": True})
+plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
     net = dde.nn.FNN([3] + 4 * [50] + [3], "tanh", "Glorot normal")

@@ -80,7 +80,7 @@ def test_nn(test_models=None):
         plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)), cmap="rainbow")
         plt.xlabel("t")
         plt.ylabel("x")
-        plt.title("u_" + legend)
+        plt.title("u-" + legend)
         cbar = plt.colorbar(pad=0.05, aspect=10)
         cbar.mappable.set_clim(-1, 1)
         result_count += 1
@@ -88,7 +88,7 @@ def test_nn(test_models=None):
     plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
     plt.xlabel("t")
     plt.ylabel("x")
-    plt.title("u_exact")
+    plt.title("u-exact")
     cbar = plt.colorbar(pad=0.05, aspect=10)
     cbar.mappable.set_clim(-1, 1)
     plt.savefig(os.path.join(save_dir, "figure.png"))
@@ -130,9 +130,10 @@ else:
         num_boundary=80, num_initial=160
     )
 
-plt.rcParams['font.sans-serif'] = 'Times New Roman'
-plt.rcParams.update({'figure.autolayout': True})
-plt.rc('font', size=18)
+plt.rcParams["font.sans-serif"] = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "stix"
+plt.rcParams.update({"figure.autolayout": True})
+plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")

@@ -125,9 +125,10 @@ else:
     data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain + resample_times * resample_num,
                         1, solution=func, num_test=1000)
 
-plt.rcParams['font.sans-serif'] = 'Times New Roman'
-plt.rcParams.update({'figure.autolayout': True})
-plt.rc('font', size=18)
+plt.rcParams["font.sans-serif"] = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "stix"
+plt.rcParams.update({"figure.autolayout": True})
+plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
     layer_size = [1] + [50] * 3 + [2]

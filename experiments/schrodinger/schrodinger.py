@@ -1,6 +1,4 @@
 """Backend supported: tensorflow.compat.v1, tensorflow, pytorch"""
-import pdb
-
 import deepxde as dde
 import numpy as np
 import os
@@ -134,7 +132,7 @@ def test_nn(test_models=None, losses=None):
         ax2.plot(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                      label="LWIS-sigma={:.1f}".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
-    ax2.set_ylabel("L2 Relative Error")
+    ax2.set_ylabel(r"$l_2$ Relative Error")
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
     plt.savefig(os.path.join(save_dir, "sensitivity.png"))
@@ -181,9 +179,10 @@ else:
     data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
                         num_boundary=10000)
 
-plt.rcParams['font.sans-serif'] = 'Times New Roman'
-plt.rcParams.update({'figure.autolayout': True})
-plt.rc('font', size=18)
+plt.rcParams["font.sans-serif"] = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "stix"
+plt.rcParams.update({"figure.autolayout": True})
+plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
     net = dde.nn.FNN([d] + [20] * 3 + [1], "tanh", "Glorot normal")
