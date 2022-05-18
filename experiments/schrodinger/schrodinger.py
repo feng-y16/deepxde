@@ -70,7 +70,9 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
+        if legend not in ["PINN_30000", "LWIS_30000_1.0"]:
+            continue
+        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
