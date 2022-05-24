@@ -13,29 +13,28 @@ from matplotlib.gridspec import GridSpec
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=3000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=100)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=30)
+    parser.add_argument("-ep", "--epochs", type=int, default=50000)
+    parser.add_argument("-ntrd", "--num-train-samples-boundary", type=int, default=5000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=50)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
 
 def gen_testdata():
-    burgers_data = np.load(os.path.join(save_dir, "Burgers.npz"))
-    t, x, exact = burgers_data["t"], burgers_data["x"], burgers_data["usol"].T
+    t = np.linspace(0, 1, 100).reshape(-1, 1)
+    x = np.linspace(0, 2 * np.pi, 256).reshape(-1, 1)
     xx, tt = np.meshgrid(x, t)
     X = np.vstack((np.ravel(xx), np.ravel(tt))).T
-    y = exact.flatten()[:, None]
+    y = np.zeros((100 * 256, 1))
     return X, y, t, x
 
 
 def pde(x, y):
     dy_x = dde.grad.jacobian(y, x, i=0, j=0)
     dy_t = dde.grad.jacobian(y, x, i=0, j=1)
-    dy_xx = dde.grad.hessian(y, x, i=0, j=0)
-    return dy_t + y * dy_x - 0.01 / np.pi * dy_xx
+    return dy_t + 100 * dy_x
 
 
 def plot_loss(loss_train, loss_test):
@@ -60,6 +59,11 @@ def plot_loss_combined(losses):
     plt.savefig(os.path.join(save_dir, "loss.pdf"))
     plt.savefig(os.path.join(save_dir, "loss.png"))
     plt.close()
+
+
+def func(x):
+    sol = np.zeros_like(x[:, 0:1])
+    return sol
 
 
 def test_nn(test_models=None):
@@ -101,7 +105,7 @@ resample = args.resample
 resample_times = args.resample_times
 resample_num = args.resample_numbers
 epochs = args.epochs
-num_train_samples_domain = args.num_train_samples_domain
+num_train_samples_boundary = args.num_train_samples_boundary
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
@@ -109,25 +113,25 @@ if resample:
 else:
     prefix = "PINN"
 print("resample:", resample)
-print("total data points:", num_train_samples_domain + resample_times * resample_num)
+print("total data points:", num_train_samples_boundary + resample_times * resample_num)
 
-geom = dde.geometry.Interval(-1, 1)
+geom = dde.geometry.Interval(0, 2 * np.pi)
 timedomain = dde.geometry.TimeDomain(0, 1.0)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
-bc = dde.icbc.DirichletBC(geomtime, lambda x: 0, lambda _, on_boundary: on_boundary)
+bc = dde.icbc.PeriodicBC(geomtime, 0, lambda _, on_boundary: on_boundary)
 ic = dde.icbc.IC(
-    geomtime, lambda x: -np.sin(np.pi * x[:, 0:1]), lambda _, on_initial: on_initial
+    geomtime, lambda x: np.sin(x[:, 0:1]), lambda _, on_initial: on_initial
 )
 
 if resample:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain, num_boundary=80, num_initial=160
+        geomtime, pde, [bc, ic], num_domain=10000, num_boundary=num_train_samples_boundary, num_initial=10000
     )
 else:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain + resample_times * resample_num,
-        num_boundary=80, num_initial=160
+        geomtime, pde, [bc, ic], num_domain=10000,
+        num_boundary=num_train_samples_boundary + resample_times * resample_num, num_initial=10000
     )
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
@@ -139,11 +143,11 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3)
+    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=1)
+                                                                   sigma=1, boundary=True)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)
@@ -170,7 +174,7 @@ else:
         loss_history = info["loss_history"]
         train_state = info["train_state"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3)
+        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

@@ -140,7 +140,8 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=[1, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sigma=1.0)
+                                                                   sample_num=resample_num, sample_count=resample_times,
+                                                                   sigma=1.0)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)

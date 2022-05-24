@@ -145,7 +145,7 @@ class PDE(Data):
             )
 
         bcs_start = np.cumsum([0] + self.num_bcs)
-        error_f = [fi[bcs_start[-1] :] for fi in f]
+        error_f = [fi[bcs_start[-1]:] for fi in f]
         losses = [
             loss[i](bkd.zeros_like(error), error) for i, error in enumerate(error_f)
         ]
@@ -187,12 +187,15 @@ class PDE(Data):
         self.train_x, self.train_y, self.train_aux_vars = None, None, None
         self.train_next_batch()
 
-    def train_points_by_gradient(self, sample_prob, sample_num):
+    def sample_train_points(self, sample_prob, sample_num, boundary=False):
         X = np.empty((0, self.geom.dim), dtype=config.real(np))
         if sample_num > 0:
             sample_count = 0
             while sample_count < sample_num:
-                tmp = self.geom.random_points(1, random="pseudo")
+                if boundary:
+                    tmp = self.geom.random_boundary_points(1, random="pseudo")
+                else:
+                    tmp = self.geom.random_points(1, random="pseudo")
                 if np.random.rand() < sample_prob(tmp):
                     X = np.vstack((tmp, X))
                     sample_count += 1
@@ -206,18 +209,37 @@ class PDE(Data):
             X = np.array(list(filter(is_not_excluded, X)))
         return X
 
-    def add_train_points_by_gradient(self, sample_prob, sample_num):
-        train_x = self.train_points_by_gradient(sample_prob, sample_num)
-        train_y = self.soln(train_x) if self.soln else None
-        if self.auxiliary_var_fn is not None:
-            train_aux_vars = self.auxiliary_var_fn(train_x).astype(
-                config.real(np)
+    def add_train_points(self, sample_prob, sample_num, boundary=False):
+        if boundary:
+            train_x_bc = self.sample_train_points(sample_prob, sample_num, boundary)
+            self.train_x_all = np.concatenate((self.train_x_all, train_x_bc))
+            self.num_boundary += len(train_x_bc)
+            x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
+            self.num_bcs = list(map(len, x_bcs))
+            self.train_x_bc = (
+                np.vstack(x_bcs)
+                if x_bcs
+                else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
             )
-            self.train_aux_vars = np.concatenate((self.train_aux_vars, train_aux_vars))
-        self.train_x = np.concatenate((self.train_x, train_x))
-        if self.train_y is not None:
-            self.train_y = np.concatenate((self.train_y, train_y))
-        self.num_domain += sample_num
+        else:
+            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+            train_y = self.soln(train_x) if self.soln else None
+            if self.auxiliary_var_fn is not None:
+                train_aux_vars = self.auxiliary_var_fn(train_x).astype(
+                    config.real(np)
+                )
+                self.train_aux_vars = np.concatenate((self.train_aux_vars, train_aux_vars))
+            self.train_x_all = np.concatenate((self.train_x, train_x))
+            if self.train_y is not None:
+                self.train_y = np.concatenate((self.train_y, train_y))
+            self.num_domain += len(train_x)
+            if self.pde is not None:
+                self.train_x = np.vstack((self.train_x, train_x))
+            self.train_y = self.soln(self.train_x) if self.soln else None
+            if self.auxiliary_var_fn is not None:
+                self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
+                    config.real(np)
+                )
 
     def add_anchors(self, anchors):
         """Add new points for training PDE losses. The BC points will not be updated."""

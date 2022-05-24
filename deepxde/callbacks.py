@@ -491,43 +491,49 @@ class PDEResidualResampler(Callback):
 class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100, sample_num=100, sigma=1):
+    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
+        self.sample_count = sample_count
         self.sigma = sigma
-        self.sample_count = 0
+        self.current_sample_count = 0
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
+        self.boundary = boundary
 
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
 
     def on_epoch_end(self):
         self.epochs_since_last_resample += 1
-        if self.epochs_since_last_resample < self.period or self.sample_count == self.sample_num:
+        if self.epochs_since_last_resample < self.period or self.current_sample_count == self.sample_count:
             return
-        self.sample_count += 1
+        self.current_sample_count += 1
         self.epochs_since_last_resample = 0
-        y_pred, _ = self.model._outputs_losses(True, self.model.train_state.X_train,
-                                               self.model.train_state.y_train,
-                                               self.model.train_state.train_aux_vars)
-        if self.model.train_state.y_train is not None:
-            y_loss = np.linalg.norm(self.model.train_state.y_train - y_pred, ord=2, axis=1)
+        if self.boundary:
+            x = self.model.data.train_x_bc
+            y = None
+        else:
+            x = self.model.data.train_x
+            y = self.model.data.train_y
+        y_pred, _ = self.model._outputs_losses(True, x, y, self.model.data.train_aux_vars)
+        if y is not None:
+            y_loss = np.linalg.norm(y - y_pred, ord=2, axis=1)
         else:
             y_loss = np.linalg.norm(y_pred, ord=2, axis=1)
         y_loss /= np.sum(y_loss)
 
-        def sample_prob(x):
-            dist = np.linalg.norm(self.model.train_state.X_train - x, ord=2, axis=1)
-            prob = np.sum(1 / np.sqrt(2 * np.pi) / self.sigma * np.exp(-dist ** 2 / (2 * self.sigma ** 2)))
+        def sample_prob(sample):
+            dist = np.linalg.norm(sample - x, ord=2, axis=1)
+            prob = np.sum(y_loss * 1 / np.sqrt(2 * np.pi) / self.sigma *
+                          np.exp(-dist ** 2 / (2 * self.sigma ** 2)))
             return prob
 
-        self.model.data.add_train_points_by_gradient(sample_prob, self.sample_num)
-
+        self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
         if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
             print("Initial value of self.num_bcs:", self.num_bcs_initial)
             print("self.model.data.num_bcs:", self.model.data.num_bcs)
             raise ValueError(
                 "`num_bcs` changed! Please update the loss function by `model.compile`."
-            )
+                )
