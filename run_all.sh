@@ -19,7 +19,7 @@ while [ "$num_jobs" -ge 1 ]
 do
   jobs
   num_jobs=$(jobs | grep -c "")
-  sleep 10
+  sleep 5
 done
 bash draw_all.sh
 bash run_sensitivity.sh

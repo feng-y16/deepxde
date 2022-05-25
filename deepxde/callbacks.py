@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import scipy
+from numba import jit
 
 from . import config
 from . import gradients as grad
@@ -512,25 +513,25 @@ class PDEGradientAccumulativeResampler(Callback):
             return
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
-        if self.boundary:
-            x = self.model.data.train_x_bc
-            y = None
-        else:
-            x = self.model.data.train_x
-            y = self.model.data.train_y
+        x = self.model.data.train_x
+        y = self.model.data.train_y
+        print(x.shape[0] + self.sample_num)
         y_pred, _ = self.model._outputs_losses(True, x, y, self.model.data.train_aux_vars)
         if y is not None:
             y_loss = np.linalg.norm(y - y_pred, ord=2, axis=1) ** 2
         else:
             y_loss = np.linalg.norm(y_pred, ord=2, axis=1) ** 2
         y_loss /= np.sum(y_loss)
+        x = np.expand_dims(x, axis=0)
+        y_loss = np.expand_dims(y_loss, axis=0)
+        dim = x.shape[-1]
+        measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
+        @jit
         def sample_prob(sample):
-            dim = sample.shape[1]
-            measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
-            dist = np.linalg.norm(sample - x, ord=2, axis=1)
-            prob = np.sum(y_loss * 1 / np.sqrt(np.pi) / self.sigma * np.exp(-dist ** 2 / (2 * self.sigma ** 2))
-                          / (measure * dist ** (dim - 1)))
+            dist = np.linalg.norm(np.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+            prob = np.sum(y_loss * 1 / np.sqrt(np.pi) / self.sigma *
+                          np.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
             return prob
 
         self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)

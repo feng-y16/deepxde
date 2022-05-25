@@ -197,16 +197,21 @@ class PDE(Data):
 
     def sample_train_points(self, sample_prob, sample_num, boundary=False):
         X = np.empty((0, self.geom.dim), dtype=config.real(np))
+        max_prob = 0.0
         if sample_num > 0:
             sample_count = 0
             while sample_count < sample_num:
                 if boundary:
-                    tmp = self.geom.random_boundary_points(1, random="pseudo")
+                    tmp = self.geom.random_boundary_points(1000, random="pseudo")
                 else:
-                    tmp = self.geom.random_points(1, random="pseudo")
-                if np.random.rand() < sample_prob(tmp):
-                    X = np.vstack((tmp, X))
-                    sample_count += 1
+                    tmp = self.geom.random_points(1000, random="pseudo")
+                probs = sample_prob(tmp)
+                max_prob = max(max_prob, np.max(prob))
+                select_indexes = np.where(np.random.rand(1000) < probs / (max_prob * 2))[0]
+                if len(select_indexes) > 0:
+                    X = np.vstack((tmp[select_indexes], X))
+                    sample_count += len(select_indexes)
+            X = X[: sample_num]
         if self.anchors is not None:
             X = np.vstack((self.anchors, X))
         if self.exclusions is not None:

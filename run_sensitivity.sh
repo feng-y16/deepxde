@@ -23,7 +23,7 @@ while [ "$num_jobs" -ge 1 ]
 do
   jobs
   num_jobs=$(jobs | grep -c "")
-  sleep 10
+  sleep 5
 done
 CUDA_VISIBLE_DEVICES=6 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_15000 PINN_30000 PINN_45000 PINN_60000 \
   LWIS_15000_0.5 LWIS_15000_1.0 LWIS_15000_2.0 LWIS_30000_0.5 LWIS_30000_1.0 LWIS_30000_2.0 LWIS_45000_0.5 LWIS_45000_1.0 LWIS_45000_2.0 \

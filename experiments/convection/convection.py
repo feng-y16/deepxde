@@ -15,8 +15,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
     parser.add_argument("-ntrd", "--num-train-samples-boundary", type=int, default=5000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=50)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
+    parser.add_argument("-rest", "--resample-times", type=int, default=5)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
