@@ -8,3 +8,4 @@ CUDA_VISIBLE_DEVICES=5 DDEBACKEND=tensorflow python experiments/navier_stokes/na
 CUDA_VISIBLE_DEVICES=6 DDEBACKEND=tensorflow python experiments/schrodinger/schrodinger.py --load PINN_15000 PINN_30000 PINN_45000 PINN_60000 \
   LWIS_15000_0.5 LWIS_15000_1.0 LWIS_15000_2.0 LWIS_30000_0.5 LWIS_30000_1.0 LWIS_30000_2.0 LWIS_45000_0.5 LWIS_45000_1.0 LWIS_45000_2.0 \
   LWIS_60000_0.5 LWIS_60000_1.0 LWIS_60000_2.0 > experiments/schrodinger/draw_sensitivity.txt &
+CUDA_VISIBLE_DEVICES=7 DDEBACKEND=tensorflow python experiments/convection/convection.py --load PINN LWIS > experiments/convection/draw.txt &
