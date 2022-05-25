@@ -1,9 +1,10 @@
+import pdb
 import sys
 import time
 
 import numpy as np
 import scipy
-from numba import jit
+import jax.numpy as jnp
 
 from . import config
 from . import gradients as grad
@@ -527,11 +528,11 @@ class PDEGradientAccumulativeResampler(Callback):
         dim = x.shape[-1]
         measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
-        @jit
         def sample_prob(sample):
-            dist = np.linalg.norm(np.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-            prob = np.sum(y_loss * 1 / np.sqrt(np.pi) / self.sigma *
-                          np.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
+            pdb.set_trace()
+            dist = jnp.linalg.norm(np.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+            prob = jnp.sum(y_loss * 1 / jnp.sqrt(np.pi) / self.sigma *
+                          jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
             return prob
 
         self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)

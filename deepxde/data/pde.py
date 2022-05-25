@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 from .data import Data
 from .. import backend as bkd
@@ -197,7 +198,12 @@ class PDE(Data):
 
     def sample_train_points(self, sample_prob, sample_num, boundary=False):
         X = np.empty((0, self.geom.dim), dtype=config.real(np))
-        max_prob = 0.0
+        if boundary:
+            tmp = self.geom.random_boundary_points(1000, random="pseudo")
+        else:
+            tmp = self.geom.random_points(1000, random="pseudo")
+        probs = sample_prob(tmp)
+        max_prob = np.max(probs)
         if sample_num > 0:
             sample_count = 0
             while sample_count < sample_num:
@@ -205,15 +211,14 @@ class PDE(Data):
                     tmp = self.geom.random_boundary_points(1000, random="pseudo")
                 else:
                     tmp = self.geom.random_points(1000, random="pseudo")
+                t =time.time()
                 probs = sample_prob(tmp)
-                max_prob = max(max_prob, np.max(prob))
-                select_indexes = np.where(np.random.rand(1000) < probs / (max_prob * 2))[0]
+                select_indexes = np.where(np.random.rand(1000) < probs / max_prob)[0]
+                print(len(select_indexes), time.time() - t)
                 if len(select_indexes) > 0:
                     X = np.vstack((tmp[select_indexes], X))
                     sample_count += len(select_indexes)
             X = X[: sample_num]
-        if self.anchors is not None:
-            X = np.vstack((self.anchors, X))
         if self.exclusions is not None:
 
             def is_not_excluded(x):
