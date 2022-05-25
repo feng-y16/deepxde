@@ -13,7 +13,7 @@ from matplotlib.gridspec import GridSpec
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=50000)
+    parser.add_argument("-ep", "--epochs", type=int, default=20000)
     parser.add_argument("-ntrd", "--num-train-samples-boundary", type=int, default=5000)
     parser.add_argument("-rest", "--resample-times", type=int, default=5)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)

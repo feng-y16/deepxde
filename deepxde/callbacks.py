@@ -1,4 +1,3 @@
-import pdb
 import sys
 import time
 
@@ -387,22 +386,22 @@ class MovieDumper(Callback):
     """
 
     def __init__(
-        self,
-        filename,
-        x1,
-        x2,
-        num_points=100,
-        period=1,
-        component=0,
-        save_spectrum=False,
-        y_reference=None,
+            self,
+            filename,
+            x1,
+            x2,
+            num_points=100,
+            period=1,
+            component=0,
+            save_spectrum=False,
+            y_reference=None,
     ):
         super().__init__()
         self.filename = filename
         x1 = np.array(x1)
         x2 = np.array(x2)
         self.x = (
-            x1 + (x2 - x1) / (num_points - 1) * np.arange(num_points)[:, None]
+                x1 + (x2 - x1) / (num_points - 1) * np.arange(num_points)[:, None]
         ).astype(dtype=config.real(np))
         self.period = period
         self.component = component
@@ -514,31 +513,21 @@ class PDEGradientAccumulativeResampler(Callback):
             return
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
-        x = self.model.data.train_x
-        y = self.model.data.train_y
-        print(x.shape[0] + self.sample_num)
-        y_pred, _ = self.model._outputs_losses(True, x, y, self.model.data.train_aux_vars)
-        if y is not None:
-            y_loss = np.linalg.norm(y - y_pred, ord=2, axis=1) ** 2
+        if self.boundary:
+            x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
         else:
-            y_loss = np.linalg.norm(y_pred, ord=2, axis=1) ** 2
-        y_loss /= np.sum(y_loss)
-        x = np.expand_dims(x, axis=0)
-        y_loss = np.expand_dims(y_loss, axis=0)
+            x = self.model.data.train_x
+        y_loss = jnp.array(self.model.predict(x, self.model.data.pde, [self])).reshape(-1) ** 2
+        y_loss /= jnp.sum(y_loss)
+        x = jnp.expand_dims(x, axis=0)
+        y_loss = jnp.expand_dims(y_loss, axis=0)
         dim = x.shape[-1]
         measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
         def sample_prob(sample):
-            pdb.set_trace()
-            dist = jnp.linalg.norm(np.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+            dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
             prob = jnp.sum(y_loss * 1 / jnp.sqrt(np.pi) / self.sigma *
-                          jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
-            return prob
+                           jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
+            return np.array(prob)
 
         self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
-        if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
-            print("Initial value of self.num_bcs:", self.num_bcs_initial)
-            print("self.model.data.num_bcs:", self.model.data.num_bcs)
-            # raise ValueError(
-            #     "`num_bcs` changed! Please update the loss function by `model.compile`."
-            #     )

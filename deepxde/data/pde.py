@@ -1,5 +1,4 @@
 import numpy as np
-import time
 
 from .data import Data
 from .. import backend as bkd
@@ -208,13 +207,11 @@ class PDE(Data):
             sample_count = 0
             while sample_count < sample_num:
                 if boundary:
-                    tmp = self.geom.random_boundary_points(1000, random="pseudo")
+                    tmp = self.geom.random_boundary_points(200, random="pseudo")
                 else:
-                    tmp = self.geom.random_points(1000, random="pseudo")
-                t =time.time()
+                    tmp = self.geom.random_points(200, random="pseudo")
                 probs = sample_prob(tmp)
-                select_indexes = np.where(np.random.rand(1000) < probs / max_prob)[0]
-                print(len(select_indexes), time.time() - t)
+                select_indexes = np.where(np.random.rand(200) < probs / max_prob)[0]
                 if len(select_indexes) > 0:
                     X = np.vstack((tmp[select_indexes], X))
                     sample_count += len(select_indexes)
