@@ -519,9 +519,9 @@ class PDEGradientAccumulativeResampler(Callback):
             y = self.model.data.train_y
         y_pred, _ = self.model._outputs_losses(True, x, y, self.model.data.train_aux_vars)
         if y is not None:
-            y_loss = np.linalg.norm(y - y_pred, ord=2, axis=1)
+            y_loss = np.linalg.norm(y - y_pred, ord=2, axis=1) ** 2
         else:
-            y_loss = np.linalg.norm(y_pred, ord=2, axis=1)
+            y_loss = np.linalg.norm(y_pred, ord=2, axis=1) ** 2
         y_loss /= np.sum(y_loss)
 
         def sample_prob(sample):
@@ -534,6 +534,6 @@ class PDEGradientAccumulativeResampler(Callback):
         if not np.array_equal(self.num_bcs_initial, self.model.data.num_bcs):
             print("Initial value of self.num_bcs:", self.num_bcs_initial)
             print("self.model.data.num_bcs:", self.model.data.num_bcs)
-            raise ValueError(
-                "`num_bcs` changed! Please update the loss function by `model.compile`."
-                )
+            # raise ValueError(
+            #     "`num_bcs` changed! Please update the loss function by `model.compile`."
+            #     )

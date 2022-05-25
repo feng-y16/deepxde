@@ -211,9 +211,9 @@ class PDE(Data):
 
     def add_train_points(self, sample_prob, sample_num, boundary=False):
         if boundary:
-            train_x_bc = self.sample_train_points(sample_prob, sample_num, boundary)
-            self.train_x_all = np.concatenate((self.train_x_all, train_x_bc))
-            self.num_boundary += len(train_x_bc)
+            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+            self.train_x_all = np.concatenate((self.train_x_all, train_x))
+            self.num_boundary += len(train_x)
             x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
             self.num_bcs = list(map(len, x_bcs))
             self.train_x_bc = (
@@ -221,21 +221,20 @@ class PDE(Data):
                 if x_bcs
                 else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
             )
-        else:
-            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
-            train_y = self.soln(train_x) if self.soln else None
+            if self.pde is not None:
+                self.train_x = np.vstack((self.train_x, self.bcs[0].collocation_points(train_x)))
+                self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
-                train_aux_vars = self.auxiliary_var_fn(train_x).astype(
+                self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)
                 )
-                self.train_aux_vars = np.concatenate((self.train_aux_vars, train_aux_vars))
-            self.train_x_all = np.concatenate((self.train_x, train_x))
-            if self.train_y is not None:
-                self.train_y = np.concatenate((self.train_y, train_y))
-            self.num_domain += len(train_x)
+        else:
+            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+            self.train_x_all = np.concatenate((self.train_x_all, train_x))
             if self.pde is not None:
                 self.train_x = np.vstack((self.train_x, train_x))
-            self.train_y = self.soln(self.train_x) if self.soln else None
+                self.train_y = self.soln(self.train_x) if self.soln else None
+            self.num_domain += len(train_x)
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)
