@@ -2,6 +2,7 @@ import sys
 import time
 
 import numpy as np
+import scipy
 
 from . import config
 from . import gradients as grad
@@ -525,9 +526,11 @@ class PDEGradientAccumulativeResampler(Callback):
         y_loss /= np.sum(y_loss)
 
         def sample_prob(sample):
+            dim = sample.shape[1]
+            measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
             dist = np.linalg.norm(sample - x, ord=2, axis=1)
-            prob = np.sum(y_loss * 1 / np.sqrt(2 * np.pi) / self.sigma *
-                          np.exp(-dist ** 2 / (2 * self.sigma ** 2)))
+            prob = np.sum(y_loss * 1 / np.sqrt(np.pi) / self.sigma * np.exp(-dist ** 2 / (2 * self.sigma ** 2))
+                          / (measure * dist ** (dim - 1)))
             return prob
 
         self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
