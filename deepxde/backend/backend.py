@@ -20,6 +20,7 @@ lib = None
 tf = None
 torch = None
 jax = None
+paddle = None
 
 ###############################################################################
 # Tensor, data type and context interfaces
@@ -57,6 +58,14 @@ def data_type_dict():
     """
 
 
+def is_gpu_available():
+    """Returns a bool indicating if GPU is currently available.
+
+    Returns:
+        True if a GPU device is available.
+    """
+
+
 def is_tensor(obj):
     """Returns True if `obj` is a backend-native type tensor."""
 
@@ -68,7 +77,7 @@ def shape(input_tensor):
         input (Tensor): The input tensor.
 
     Returns:
-        list of ints: The tensor shape.
+        tuple or list of ints: The tensor shape.
     """
 
 

@@ -4,9 +4,17 @@ import abc
 class Data(abc.ABC):
     """Data base class."""
 
-    @abc.abstractmethod
-    def losses(self, targets, outputs, loss, model):
+    def losses(self, targets, outputs, loss_fn, inputs, model, aux=None):
         """Return a list of losses, i.e., constraints."""
+        raise NotImplementedError("Data.losses is not implemented.")
+
+    def losses_train(self, targets, outputs, loss_fn, inputs, model, aux=None):
+        """Return a list of losses for training dataset, i.e., constraints."""
+        return self.losses(targets, outputs, loss_fn, inputs, model, aux=aux)
+
+    def losses_test(self, targets, outputs, loss_fn, inputs, model, aux=None):
+        """Return a list of losses for test dataset, i.e., constraints."""
+        return self.losses(targets, outputs, loss_fn, inputs, model, aux=aux)
 
     @abc.abstractmethod
     def train_next_batch(self, batch_size=None):
@@ -29,8 +37,8 @@ class Tuple(Data):
         self.test_x = test_x
         self.test_y = test_y
 
-    def losses(self, targets, outputs, loss, model):
-        return [loss(targets, outputs)]
+    def losses(self, targets, outputs, loss_fn, inputs, model, aux=None):
+        return loss_fn(targets, outputs)
 
     def train_next_batch(self, batch_size=None):
         return self.train_x, self.train_y

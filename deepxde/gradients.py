@@ -1,6 +1,6 @@
 __all__ = ["jacobian", "hessian"]
 
-from .backend import backend_name, tf, torch, jax
+from .backend import backend_name, tf, torch, jax, paddle
 
 
 class Jacobian:
@@ -18,18 +18,16 @@ class Jacobian:
         self.ys = ys
         self.xs = xs
 
-        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch"]:
+        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch", "paddle"]:
             self.dim_y = ys.shape[1]
-            self.dim_x = xs.shape[1]
         elif backend_name == "jax":
             # For backend jax, a tuple of a jax array and a callable is passed as one of
             # the arguments, since jax does not support computational graph explicitly.
             # The array is used to control the dimensions and the callable is used to
-            # obtain the derivative function, which can be used to compute the derivatives.
-            # Note that `xs` and `ys[0]` are of 1-dimensional, which is different from
-            # other backends, where `xs` and `ys` are batched tensors.
-            self.dim_y = ys[0].shape[0]
-            self.dim_x = xs.shape[0]
+            # obtain the derivative function, which can be used to compute the
+            # derivatives.
+            self.dim_y = ys[0].shape[1]
+        self.dim_x = xs.shape[1]
 
         self.J = {}
 
@@ -52,26 +50,27 @@ class Jacobian:
                 self.J[i] = torch.autograd.grad(
                     y, self.xs, grad_outputs=torch.ones_like(y), create_graph=True
                 )[0]
+            elif backend_name == "paddle":
+                y = self.ys[:, i : i + 1] if self.dim_y > 1 else self.ys
+                self.J[i] = paddle.grad(y, self.xs, create_graph=True)[0]
             elif backend_name == "jax":
-                # Here, we use jax.grad to compute first-order gradient of a function. Non that, this is
-                # different from Tensorflow and PyTorch that the input of a function is no longer a batch.
-                # Instead, it is a single point. Formally, backend jax computes gradients pointwisely and
-                # then vectorizes to batch, by jax.vmap. However, computationally, this is in fact done
-                # batchwisely and efficiently, once vectorization part is dealt with correctly. It is very
-                # important to note that, without jax.vmap, this can only deal with functions whose output is
-                # scalar and input is a single point.
-                # Other options are jax.jacrev+jax.vmap and jax.jacfwd+jax.vmap, which could be used to compute
-                # the full Jacobian matrix efficiently, if needed.
-                # Also, jax.vjp, jax.jvp will bring more flexibility and efficiency. jax.vjp+jax.vmap and/or
-                # jax.jvp+jax.vmap will be implemented in the future.
+                # Here, we use jax.grad to compute the gradient of a function. This is
+                # different from TensorFlow and PyTorch that the input of a function is
+                # no longer a batch. Instead, it is a single point. Formally, backend
+                # jax computes gradients pointwisely and then vectorizes to batch, by
+                # jax.vmap. However, computationally, this is in fact done batchwisely
+                # and efficiently. It is very important to note that, without jax.vmap,
+                # this can only deal with functions whose output is a scalar and input
+                # is a single point.
+                # Other options are jax.jacrev + jax.vmap or jax.jacfwd + jax.vmap,
+                # which could be used to compute the full Jacobian matrix efficiently,
+                # if needed. Also, jax.vjp, jax.jvp will bring more flexibility and
+                # efficiency. jax.vjp + jax.vmap or jax.jvp + jax.vmap will be
+                # implemented in the future.
+                grad_fn = jax.grad(lambda x: self.ys[1](x)[i])
+                self.J[i] = (jax.vmap(grad_fn)(self.xs), grad_fn)
 
-                def fn_i(_x):
-                    return self.ys[1](_x)[i]
-
-                grad_fn = jax.grad(fn_i)
-                self.J[i] = (grad_fn(self.xs), grad_fn)
-
-        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch"]:
+        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch", "paddle"]:
             return (
                 self.J[i] if j is None or self.dim_x == 1 else self.J[i][:, j : j + 1]
             )
@@ -83,7 +82,7 @@ class Jacobian:
                 self.J[i]
                 if j is None or self.dim_x == 1
                 else (
-                    self.J[i][0][j : j + 1],
+                    self.J[i][0][:, j : j + 1],
                     lambda inputs: self.J[i][1](inputs)[j : j + 1],
                 )
             )
@@ -145,7 +144,7 @@ class Jacobians:
         #     f(x)
         if backend_name in ["tensorflow.compat.v1", "tensorflow"]:
             key = (ys.ref(), xs.ref())
-        elif backend_name == "pytorch":
+        elif backend_name in ["pytorch", "paddle"]:
             key = (ys, xs)
         elif backend_name == "jax":
             key = (id(ys[0]), id(xs))
@@ -201,7 +200,7 @@ class Hessian:
     """
 
     def __init__(self, y, xs, component=None, grad_y=None):
-        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch"]:
+        if backend_name in ["tensorflow.compat.v1", "tensorflow", "pytorch", "paddle"]:
             dim_y = y.shape[1]
         elif backend_name == "jax":
             dim_y = y[0].shape[0]
@@ -243,7 +242,7 @@ class Hessians:
     def __call__(self, y, xs, component=None, i=0, j=0, grad_y=None):
         if backend_name in ["tensorflow.compat.v1", "tensorflow"]:
             key = (y.ref(), xs.ref(), component)
-        elif backend_name == "pytorch":
+        elif backend_name in ["pytorch", "paddle"]:
             key = (y, xs, component)
         elif backend_name == "jax":
             key = (id(y[0]), id(xs), component)
