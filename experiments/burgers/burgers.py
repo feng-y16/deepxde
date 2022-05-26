@@ -14,9 +14,9 @@ from matplotlib.gridspec import GridSpec
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=5)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=500)
+    parser.add_argument("-rest", "--resample-times", type=int, default=3)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=500)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
@@ -143,7 +143,7 @@ if len(load) == 0:
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=1)
+                                                                   sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
         loss_history, train_state = model.train(epochs=epochs)

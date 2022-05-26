@@ -15,9 +15,9 @@ import tensorflow as tf
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=100)
-    parser.add_argument("-rest", "--resample-times", type=int, default=5)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=10)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5)
+    parser.add_argument("-rest", "--resample-times", type=int, default=3)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=5)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
@@ -31,7 +31,7 @@ def ode_system(x, y):
     dy/dx = -ry+3r-2rexp(-t)
     """
     dy_x = dde.grad.jacobian(y, x, i=0)
-    return [dy_x + r * y - 3 * r + 2 * r * tf.exp(-x)]
+    return dy_x + r * y - 3 * r + 2 * r * tf.exp(-x)
 
 
 def boundary(_, on_initial):
@@ -86,9 +86,9 @@ def test_nn(test_models=None):
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error in u: {:.3f}".format(l2_difference_u))
         if result_count % 2 == 0:
-            ax1.plot(x, y_pred[:, 0], label=legend, linewidth=3, linestyle="--")
+            ax1.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
         else:
-            ax2.plot(x, y_pred[:, 1], label=legend, linewidth=3, linestyle="--")
+            ax2.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
         result_count += 1
     ax1.set_xlabel("t")
     ax1.set_title("u")
@@ -120,10 +120,10 @@ geom = dde.geometry.TimeDomain(0, 1)
 ic = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
 
 if resample:
-    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 1, solution=func, num_test=1000)
+    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 2, solution=func, num_test=1000)
 else:
     data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain + resample_times * resample_num,
-                        1, solution=func, num_test=1000)
+                        2, solution=func, num_test=1000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -131,7 +131,7 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
-    layer_size = [1] + [50] * 3 + [2]
+    layer_size = [1] + [50] * 3 + [1]
     activation = "tanh"
     initializer = "Glorot uniform"
     net = dde.nn.FNN(layer_size, activation, initializer)

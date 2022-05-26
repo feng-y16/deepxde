@@ -15,9 +15,9 @@ import tensorflow as tf
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=10)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=3)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
@@ -37,11 +37,11 @@ def pde_d(dimension, x, y):
             laplace += dde.grad.hessian(y, x, i=i, j=i)
     psi_x = tf.zeros_like(x[:, 0:1])
     for i in range(dimension):
-        psi_x += tf.cos(x[i:(i + 1)])
+        psi_x += tf.cos(x[:, i:(i + 1)])
     psi_x *= 2 / dimension
     psi_x = -1 / c ** 2 * tf.exp(psi_x)
     for i in range(dimension):
-        psi_x += tf.sin(x[i:(i + 1)]) ** 2 / dimension ** 2 - tf.cos(x[i:(i + 1)]) / dimension
+        psi_x += tf.sin(x[:, i:(i + 1)]) ** 2 / dimension ** 2 - tf.cos(x[:, i:(i + 1)]) / dimension
     psi_x -= 3
     return laplace - y ** 3 - psi_x * y - 3 * y
 
