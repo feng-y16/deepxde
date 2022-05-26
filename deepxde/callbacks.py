@@ -517,7 +517,10 @@ class PDEGradientAccumulativeResampler(Callback):
             x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
         else:
             x = self.model.data.train_x
-        y_loss = (jnp.array(self.model.predict(x, self.model.data.pde, [self])) ** 2).sum(axis=1)
+        y_loss = (jnp.array(self.model.predict(x, self.model.data.pde, [self])) ** 2)
+        if len(y_loss.shape) == 3:
+            y_loss = y_loss.sum(axis=0)
+        y_loss = y_loss.reshape(-1)
         y_loss /= jnp.sum(y_loss)
         x = jnp.expand_dims(x, axis=0)
         y_loss = jnp.expand_dims(y_loss, axis=0)
