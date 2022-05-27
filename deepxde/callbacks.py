@@ -1,14 +1,18 @@
+import pdb
 import sys
 import time
 
 import numpy as np
 import scipy
 import jax.numpy as jnp
+import tensorflow as tf
 
 from . import config
 from . import gradients as grad
+from . import utils
 from .backend import backend_name
 from .utils import list_to_str, save_animation
+from .gradients import jacobian
 
 
 class Callback:
@@ -508,6 +512,87 @@ class PDEGradientAccumulativeResampler(Callback):
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
 
+    def get_weight(self, x, operator, metric='loss'):
+        op = None
+        if isinstance(x, tuple):
+            x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
+        else:
+            x = np.asarray(x, dtype=config.real(np))
+
+        if metric == "loss":
+            if utils.get_num_args(operator) == 2:
+
+                @tf.function
+                def op(inputs):
+                    y = self.model.net(inputs)
+                    outs = operator(inputs, y, aux_vars)
+                    loss = None
+                    if type(outs) == list:
+                        for out in outs:
+                            if loss is None:
+                                loss = out ** 2
+                            else:
+                                loss += out ** 2
+                    else:
+                        loss = outs ** 2
+                    return tf.reduce_sum(loss, axis=1)
+
+            elif utils.get_num_args(operator) == 3:
+                aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
+
+                @tf.function
+                def op(inputs):
+                    y = self.model.net(inputs)
+                    outs = operator(inputs, y, aux_vars)
+                    loss = None
+                    if type(outs) == list:
+                        for out in outs:
+                            if loss is None:
+                                loss = out ** 2
+                            else:
+                                loss += out ** 2
+                    else:
+                        loss = outs ** 2
+                    return tf.reduce_sum(loss, axis=1)
+
+        else:
+            if utils.get_num_args(operator) == 2:
+
+                @tf.function
+                def op(inputs):
+                    y = self.model.net(inputs)
+                    outs = operator(inputs, y)
+                    loss = None
+                    if type(outs) == list:
+                        for out in outs:
+                            if loss is None:
+                                loss = out ** 2
+                            else:
+                                loss += out ** 2
+                    else:
+                        loss = outs ** 2
+                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+
+            elif utils.get_num_args(operator) == 3:
+                aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
+
+                @tf.function
+                def op(inputs):
+                    y = self.model.net(inputs)
+                    outs = operator(inputs, y, aux_vars)
+                    loss = None
+                    if type(outs) == list:
+                        for out in outs:
+                            if loss is None:
+                                loss = out ** 2
+                            else:
+                                loss += out ** 2
+                    else:
+                        loss = outs ** 2
+                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+
+        return utils.to_numpy(op(x))
+
     def on_epoch_end(self):
         self.epochs_since_last_resample += 1
         if self.epochs_since_last_resample < self.period or self.current_sample_count == self.sample_count:
@@ -518,19 +603,19 @@ class PDEGradientAccumulativeResampler(Callback):
             x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
         else:
             x = self.model.data.train_x
-        y_loss = (jnp.array(self.model.predict(x, self.model.data.pde, [self])) ** 2)
-        if len(y_loss.shape) == 3:
-            y_loss = y_loss.sum(axis=0)
-        y_loss = y_loss.reshape(-1)
-        y_loss /= jnp.sum(y_loss)
-        x = jnp.expand_dims(x, axis=0)
-        y_loss = jnp.expand_dims(y_loss, axis=0)
+        weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
+        target_indexes = jnp.argsort(-weight)[: 100]
+        weight = weight[target_indexes]
+        weight /= jnp.sum(weight)
+        x = jnp.expand_dims(x[target_indexes, :], axis=0)
+
+        weight = jnp.expand_dims(weight, axis=0)
         dim = x.shape[-1]
         measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
         def sample_prob(sample):
             dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-            prob = jnp.sum(y_loss * 1 / jnp.sqrt(np.pi) / self.sigma *
+            prob = jnp.sum(weight * 1 / jnp.sqrt(np.pi) / self.sigma *
                            jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
             return np.array(prob)
 

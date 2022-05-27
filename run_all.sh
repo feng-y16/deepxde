@@ -5,9 +5,16 @@ bash run.sh stiff_ode &
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
-  jobs
-  num_jobs=$(jobs | grep -c "")
-  sleep 60
+  num_jobs=$(jobs | grep -c "Run")
+  echo "$num_jobs" "jobs remaining"
+  sleep 20
 done
-bash run_sensitivity.sh
+bash run.sh schrodinger &
+num_jobs=$(jobs | grep -c "")
+while [ "$num_jobs" -ge 1 ]
+do
+  num_jobs=$(jobs | grep -c "Run")
+  echo "$num_jobs" "jobs remaining"
+  sleep 20
+done
 echo "all experiments complete"

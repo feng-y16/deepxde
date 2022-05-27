@@ -13,7 +13,7 @@ from matplotlib.gridspec import GridSpec
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
+    parser.add_argument("-ep", "--epochs", type=int, default=50000)
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=500)
     parser.add_argument("-rest", "--resample-times", type=int, default=3)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=500)
@@ -40,8 +40,8 @@ def pde(x, y):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
     ax.legend(loc="best")
@@ -53,7 +53,7 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
+        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
@@ -81,6 +81,8 @@ def test_nn(test_models=None):
                             cmap="rainbow")
         ax.set_xlabel("t")
         ax.set_ylabel("x")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(-1, 1)
         ax.set_title("u-" + legend)
         cbar = plt.colorbar(fig, pad=0.05, aspect=10)
         cbar.mappable.set_clim(-1, 1)
@@ -93,6 +95,8 @@ def test_nn(test_models=None):
     fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
     ax.set_xlabel("t")
     ax.set_ylabel("x")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(-1, 1)
     ax.set_title("u-exact")
     cbar = plt.colorbar(fig, pad=0.05, aspect=10)
     cbar.mappable.set_clim(-1, 1)
@@ -149,10 +153,10 @@ if len(load) == 0:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
                                                                    sigma=0.1)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
+        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
         resampler = None
-        loss_history, train_state = model.train(epochs=epochs)
+        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
     resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,

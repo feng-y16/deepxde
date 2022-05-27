@@ -74,8 +74,8 @@ def v_func(x):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
     ax.legend(loc="best")
@@ -87,7 +87,7 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
+        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
@@ -100,6 +100,8 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, re
     ax = plt.subplot(grid)
     ax.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
     ax.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.set_title(title)
     m = plt.cm.ScalarMappable(cmap='rainbow', norm=Normalize(vmin=v_min, vmax=v_max))
     m.set_array(data_z)
@@ -228,7 +230,7 @@ else:
 print("resample:", resample)
 print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
-spatial_domain = dde.geometry.Rectangle([0.0, 0.0], [1.0, 1.0])
+spatial_domain = dde.geometry.Rectangle([0, 0], [1, 1])
 temporal_domain = dde.geometry.TimeDomain(0, 1)
 spatio_temporal_domain = dde.geometry.GeometryXTime(spatial_domain, temporal_domain)
 
@@ -243,35 +245,15 @@ initial_condition_v = dde.icbc.IC(spatio_temporal_domain,
                                   v_func, lambda _, on_initial: on_initial, component=1)
 
 if resample:
-    data = dde.data.TimePDE(
-        spatio_temporal_domain,
-        pde,
-        [
-            boundary_condition_u,
-            boundary_condition_v,
-            initial_condition_u,
-            initial_condition_v,
-        ],
-        num_domain=num_train_samples_domain,
-        num_boundary=5000,
-        num_initial=5000,
-        num_test=100000,
-    )
+    data = dde.data.TimePDE(spatio_temporal_domain, pde, [boundary_condition_u, boundary_condition_v,
+                                                          initial_condition_u, initial_condition_v],
+                            num_domain=num_train_samples_domain, num_boundary=5000, num_initial=5000,
+                            num_test=100000)
 else:
-    data = dde.data.TimePDE(
-        spatio_temporal_domain,
-        pde,
-        [
-            boundary_condition_u,
-            boundary_condition_v,
-            initial_condition_u,
-            initial_condition_v,
-        ],
-        num_domain=num_train_samples_domain + resample_times * resample_num,
-        num_boundary=5000,
-        num_initial=5000,
-        num_test=100000,
-    )
+    data = dde.data.TimePDE(spatio_temporal_domain, pde, [boundary_condition_u, boundary_condition_v,
+                                                          initial_condition_u, initial_condition_v],
+                            num_domain=num_train_samples_domain + resample_times * resample_num, num_boundary=5000,
+                            num_initial=5000, num_test=100000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -288,10 +270,10 @@ if len(load) == 0:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
                                                                    sigma=0.1)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
+        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
         resampler = None
-        loss_history, train_state = model.train(epochs=epochs)
+        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
     resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,

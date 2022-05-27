@@ -15,9 +15,9 @@ import tensorflow as tf
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5000)
     parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=10000)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
@@ -57,8 +57,8 @@ def func_d(dimension, x):
 
 def plot_loss(loss_train, loss_test):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    ax.semilogy(1000 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
-    ax.semilogy(1000 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_train)), loss_train, marker="o", label="Training Loss", linewidth=3)
+    ax.semilogy(epochs // 20 * np.arange(len(loss_test)), loss_train, marker="o", label="Testing Loss", linewidth=3)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
     ax.legend(loc="best")
@@ -72,7 +72,7 @@ def plot_loss_combined(losses):
     for legend, loss in losses.items():
         if legend not in ["PINN_30000", "LWIS_30000_1.0"]:
             continue
-        ax.semilogy(1000 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
+        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
         ax.set_xlabel("Epochs")
         ax.set_ylabel("Testing Loss")
         ax.legend(loc="best")
@@ -121,9 +121,9 @@ def test_nn(test_models=None, losses=None):
     ax2 = plt.subplot(gs[0, 1])
     num_samples_for_loss = 30000
     PINN_loss = PINN_losses[num_samples_for_loss]
-    ax1.semilogy(1000 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
+    ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
-        ax1.semilogy(1000 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+        ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
                      label=r"LWIS-$\sigma={:.1f}$".format(LWIS_sigma), linewidth=3)
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Testing Loss")
@@ -176,10 +176,10 @@ geom = dde.geometry.Hypercube([0 for _ in range(d)], [2 * np.pi for _ in range(d
 bc = dde.icbc.DirichletBC(geom, func, lambda _, on_boundary: on_boundary)
 
 if resample:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=10000)
+    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=10000, num_test=100000)
 else:
     data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
-                        num_boundary=10000)
+                        num_boundary=10000, num_test=100000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -195,10 +195,10 @@ if len(load) == 0:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
                                                                    sigma=sigma)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
+        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
         resampler = None
-        loss_history, train_state = model.train(epochs=epochs)
+        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
     resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,

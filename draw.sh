@@ -1,14 +1,34 @@
 #!/bin/bash
 exp_name=$1
 if [ "$exp_name" == "navier_stokes" ]; then
-  CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_100.0 LWIS_100.0 --re 100 &> experiments/"$exp_name"/draw_100.txt &
-  CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_200.0 LWIS_200.0 --re 200 &> experiments/"$exp_name"/draw_200.txt &
-  CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_500.0 LWIS_500.0 --re 500 &> experiments/"$exp_name"/draw_500.txt &
+  CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load PINN_100.0 LWIS_100.0 --re 100 &> experiments/"$exp_name"/draw_100.txt &
+  CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load PINN_1000.0 LWIS_1000.0 --re 1000 &> experiments/"$exp_name"/draw_1000.txt &
+  CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load PINN_10000.0 LWIS_10000.0 --re 10000 &> experiments/"$exp_name"/draw_10000.txt &
 elif [ "$exp_name" == "schrodinger" ]; then
-  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_30000 LWIS_30000_1.0 &> experiments/"$exp_name"/draw.txt &
-  CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN_15000 PINN_30000 PINN_45000 PINN_60000 \
-  LWIS_15000_0.5 LWIS_15000_1.0 LWIS_15000_2.0 LWIS_30000_0.5 LWIS_30000_1.0 LWIS_30000_2.0 LWIS_45000_0.5 LWIS_45000_1.0 LWIS_45000_2.0 \
-  LWIS_60000_0.5 LWIS_60000_1.0 LWIS_60000_2.0 &> experiments/"$exp_name"/draw_sensitivity.txt &
+  num_train_samples_domain=5000
+  resample_times=(1 2 3 4)
+  resample_numbers=5000
+  sigmas=(0.1 0.5 1.0)
+  draw_load=""
+  for i in $(seq 0 3); do
+    num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
+    draw_load="${draw_load} PINN_${num_train_samples}"
+  done
+  for i in $(seq 0 3); do
+    num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
+    for j in $(seq 0 2); do
+      sigma=${sigmas[j]}
+      draw_load="${draw_load} LWIS_${num_train_samples}_${sigma}"
+    done
+  done
+  draw_load="${draw_load} "
+  draw_load=${draw_load:1:-1}
+  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load "${draw_load}" &> experiments/"$exp_name"/draw_sensitivity.txt &
 else
-  CUDA_VISIBLE_DEVICES=5 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS &> experiments/"$exp_name"/draw.txt &
+  CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS \
+  &> experiments/"$exp_name"/draw.txt &
 fi
