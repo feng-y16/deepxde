@@ -1,5 +1,6 @@
 #!/bin/bash
 bash run.sh burgers &
+bash run.sh convection &
 bash run.sh navier_stokes &
 bash run.sh stiff_ode &
 num_jobs=$(jobs | grep -c "")
