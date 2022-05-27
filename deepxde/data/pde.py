@@ -254,6 +254,7 @@ class PDE(Data):
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)
                 )
+        return train_x
 
     def add_anchors(self, anchors):
         """Add new points for training PDE losses. The BC points will not be updated."""

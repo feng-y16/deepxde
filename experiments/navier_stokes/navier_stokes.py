@@ -14,7 +14,7 @@ from solver import solve
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
+    parser.add_argument("-ep", "--epochs", type=int, default=50000)
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5000)
     parser.add_argument("-rest", "--resample-times", type=int, default=3)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
@@ -96,17 +96,18 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
-    # plot a contour
-    plt.subplot(grid)
-    plt.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
-    plt.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
-    plt.title(title)
+def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, resampled_points=None):
+    ax = plt.subplot(grid)
+    ax.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
+    ax.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
+    ax.set_title(title)
     m = plt.cm.ScalarMappable(cmap='rainbow', norm=Normalize(vmin=v_min, vmax=v_max))
     m.set_array(data_z)
     m.set_clim(v_min, v_max)
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format='%.0e')
     cbar.mappable.set_clim(v_min, v_max)
+    if resampled_points is not None:
+        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker=',', s=1, color='y')
 
 
 def test_nn(times=None, test_models=None):
@@ -122,7 +123,18 @@ def test_nn(times=None, test_models=None):
         X = np.vstack((np.ravel(x), np.ravel(y))).T
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
-        u_exact, v_exact, p_exact = solve(num_test_samples, 10000, time, Re)
+        exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
+        if not os.path.isfile(exact_data_path):
+            u_exact, v_exact, p_exact = solve(num_test_samples, 20000, time, Re)
+            exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
+            with open(exact_data_path, "wb") as f_solver:
+                pickle.dump(exact_data, f_solver)
+        else:
+            with open(exact_data_path, "rb") as f_solver:
+                exact_data = pickle.load(f_solver)
+            u_exact = exact_data["u"]
+            v_exact = exact_data["v"]
+            p_exact = exact_data["p"]
         p_exact -= np.mean(p_exact)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
@@ -163,16 +175,21 @@ def test_nn(times=None, test_models=None):
             print("Mean residual: {:.3f}".format(residual))
             print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
                   .format(l2_difference_u, l2_difference_v, l2_difference_p))
+            resampled_points = test_model.resampled_data
+            if resampled_points is not None:
+                resampled_points = np.concatenate(resampled_points, axis=0)
+                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.05)[0]
+                resampled_points = resampled_points[selected_index][:, : 2]
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u-" + legend[:4], u_min, u_max)
+                    "u-" + legend[:4], u_min, u_max, 20, resampled_points=resampled_points)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v-" + legend[:4], v_min, v_max)
+                    "v-" + legend[:4], v_min, v_max, 20, resampled_points=resampled_points)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p-" + legend[:4], p_min, p_max)
+                    "p-" + legend[:4], p_min, p_max, 20, resampled_points=resampled_points)
             result_count += 1
-        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max)
-        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max)
-        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p-exact', p_min, p_max)
+        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
+        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
+        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p-exact', p_min, p_max, 20)
         plt.savefig(os.path.join(save_dir, "Re={}_t={}.png".format(Re, time)))
         plt.savefig(os.path.join(save_dir, "Re={}_t={}.pdf".format(Re, time)))
         plt.close()
@@ -273,10 +290,12 @@ if len(load) == 0:
                                                                    sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
+        resampler = None
         loss_history, train_state = model.train(epochs=epochs)
+    resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
-            "loss_history": loss_history, "train_state": train_state}
+            "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
     with open(os.path.join(save_dir, prefix + "_info.pkl"), "wb") as f:
         pickle.dump(info, f)
     models[prefix] = model
@@ -296,8 +315,10 @@ else:
         data.test_y = info["test_y"]
         loss_history = info["loss_history"]
         train_state = info["train_state"]
+        resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
         model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
+        model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

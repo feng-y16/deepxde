@@ -503,6 +503,7 @@ class PDEGradientAccumulativeResampler(Callback):
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
         self.boundary = boundary
+        self.sampled_train_points = []
 
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
@@ -533,4 +534,5 @@ class PDEGradientAccumulativeResampler(Callback):
                            jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
             return np.array(prob)
 
-        self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
+        sampled_train_points = self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
+        self.sampled_train_points.append(sampled_train_points)

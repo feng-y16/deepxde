@@ -14,10 +14,10 @@ import tensorflow as tf
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=3)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=5000)
+    parser.add_argument("-ep", "--epochs", type=int, default=50000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=4)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=10000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
@@ -197,10 +197,12 @@ if len(load) == 0:
                                                                    sigma=sigma)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
+        resampler = None
         loss_history, train_state = model.train(epochs=epochs)
+    resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
-            "loss_history": loss_history, "train_state": train_state}
+            "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
     with open(os.path.join(save_dir, prefix + "_info.pkl"), "wb") as f:
         pickle.dump(info, f)
     models[prefix] = model
@@ -220,8 +222,10 @@ else:
         data.test_y = info["test_y"]
         loss_history = info["loss_history"]
         train_state = info["train_state"]
+        resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
         model.compile("adam", lr=1e-3, loss_weights=[1, 100])
+        model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

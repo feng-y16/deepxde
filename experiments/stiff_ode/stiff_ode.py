@@ -87,8 +87,16 @@ def test_nn(test_models=None):
         print("L2 relative error in u: {:.3f}".format(l2_difference_u))
         if result_count % 2 == 0:
             ax1.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
+            resampled_points = test_model.resampled_data
+            if resampled_points is not None:
+                resampled_points = np.concatenate(resampled_points, axis=0)
+                ax1.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
         else:
             ax2.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
+            resampled_points = test_model.resampled_data
+            if resampled_points is not None:
+                resampled_points = np.concatenate(resampled_points, axis=0)
+                ax2.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
         result_count += 1
     ax1.set_xlabel("t")
     ax1.set_title("u")
@@ -144,10 +152,12 @@ if len(load) == 0:
                                                                    sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
+        resampler = None
         loss_history, train_state = model.train(epochs=epochs)
+    resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
-            "loss_history": loss_history, "train_state": train_state}
+            "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
     with open(os.path.join(save_dir, prefix + "_info.pkl"), "wb") as f:
         pickle.dump(info, f)
     models[prefix] = model
@@ -167,8 +177,10 @@ else:
         data.test_y = info["test_y"]
         loss_history = info["loss_history"]
         train_state = info["train_state"]
+        resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
         model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=[1, 100])
+        model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)

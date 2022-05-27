@@ -76,20 +76,25 @@ def test_nn(test_models=None):
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(dde.metrics.l2_relative_error(y_exact, y_pred)))
-        plt.subplot(gs[result_count, 0])
-        plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)), cmap="rainbow")
-        plt.xlabel("t")
-        plt.ylabel("x")
-        plt.title("u-" + legend)
-        cbar = plt.colorbar(pad=0.05, aspect=10)
+        ax = plt.subplot(gs[result_count, 0])
+        fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)),
+                            cmap="rainbow")
+        ax.set_xlabel("t")
+        ax.set_ylabel("x")
+        ax.set_title("u-" + legend)
+        cbar = plt.colorbar(fig, pad=0.05, aspect=10)
         cbar.mappable.set_clim(-1, 1)
+        resampled_points = test_model.resampled_data
+        if resampled_points is not None:
+            resampled_points = np.concatenate(resampled_points, axis=0)
+            ax.scatter(resampled_points[:, 1], resampled_points[:, 0], marker=',', s=1, color='y')
         result_count += 1
-    plt.subplot(gs[-1, 0])
-    plt.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
-    plt.xlabel("t")
-    plt.ylabel("x")
-    plt.title("u-exact")
-    cbar = plt.colorbar(pad=0.05, aspect=10)
+    ax = plt.subplot(gs[-1, 0])
+    fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
+    ax.set_xlabel("t")
+    ax.set_ylabel("x")
+    ax.set_title("u-exact")
+    cbar = plt.colorbar(fig, pad=0.05, aspect=10)
     cbar.mappable.set_clim(-1, 1)
     plt.savefig(os.path.join(save_dir, "figure.png"))
     plt.savefig(os.path.join(save_dir, "figure.pdf"))
@@ -139,17 +144,19 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3)
+    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
                                                                    sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler])
     else:
+        resampler = None
         loss_history, train_state = model.train(epochs=epochs)
+    resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
-            "loss_history": loss_history, "train_state": train_state}
+            "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
     with open(os.path.join(save_dir, prefix + "_info.pkl"), "wb") as f:
         pickle.dump(info, f)
     models[prefix] = model
@@ -169,8 +176,10 @@ else:
         data.test_y = info["test_y"]
         loss_history = info["loss_history"]
         train_state = info["train_state"]
+        resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3)
+        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+        model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
