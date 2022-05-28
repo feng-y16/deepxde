@@ -32,20 +32,18 @@ do
   echo "$exp_name" "$num_jobs" "jobs remaining"
   sleep 2
 done
-draw_load=""
+draw_load=()
 for i in $(seq 0 3); do
   num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
-  draw_load="${draw_load} PINN_${num_train_samples}"
+  draw_load=("${draw_load[@]}" "PINN_${num_train_samples}")
 done
 for i in $(seq 0 3); do
   num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
   for j in $(seq 0 2); do
     sigma=${sigmas[j]}
-    draw_load="${draw_load} LWIS_${num_train_samples}_${sigma}"
+    draw_load=("${draw_load[@]}" "LWIS_${num_train_samples}_${sigma}")
   done
 done
-draw_load="${draw_load} "
-draw_load=${draw_load:1:-1}
 CUDA_VISIBLE_DEVICES=$GPU_index DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
---load ${draw_load} &> experiments/"$exp_name"/draw_sensitivity.txt &
+--load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
 echo "bash complete"

@@ -12,22 +12,20 @@ elif [ "$exp_name" == "schrodinger" ]; then
   resample_times=(1 2 3 4)
   resample_numbers=10000
   sigmas=(0.1 0.5 1.0)
-  draw_load=""
+  draw_load=()
   for i in $(seq 0 3); do
     num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
-    draw_load="${draw_load} PINN_${num_train_samples}"
+    draw_load=("${draw_load[@]}" "PINN_${num_train_samples}")
   done
   for i in $(seq 0 3); do
     num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
     for j in $(seq 0 2); do
       sigma=${sigmas[j]}
-      draw_load="${draw_load} LWIS_${num_train_samples}_${sigma}"
+      draw_load=("${draw_load[@]}" "LWIS_${num_train_samples}_${sigma}")
     done
   done
-  draw_load="${draw_load} "
-  draw_load=${draw_load:1:-1}
-  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load ${draw_load} \
-  &> experiments/"$exp_name"/draw_sensitivity.txt &
+  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
 else
   CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS \
   &> experiments/"$exp_name"/draw.txt &
