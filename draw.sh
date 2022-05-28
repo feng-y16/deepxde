@@ -8,9 +8,9 @@ if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load PINN_10000.0 LWIS_10000.0 --re 10000 &> experiments/"$exp_name"/draw_10000.txt &
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=5000
+  num_train_samples_domain=10000
   resample_times=(1 2 3 4)
-  resample_numbers=5000
+  resample_numbers=10000
   sigmas=(0.1 0.5 1.0)
   draw_load=""
   for i in $(seq 0 3); do
@@ -26,8 +26,8 @@ elif [ "$exp_name" == "schrodinger" ]; then
   done
   draw_load="${draw_load} "
   draw_load=${draw_load:1:-1}
-  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load "${draw_load}" &> experiments/"$exp_name"/draw_sensitivity.txt &
+  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load ${draw_load} \
+  &> experiments/"$exp_name"/draw_sensitivity.txt &
 else
   CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --load PINN LWIS \
   &> experiments/"$exp_name"/draw.txt &

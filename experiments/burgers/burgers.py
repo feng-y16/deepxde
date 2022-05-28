@@ -106,6 +106,7 @@ def test_nn(test_models=None):
 
 warnings.filterwarnings("ignore")
 args = parse_args()
+print(args)
 resample = args.resample
 resample_times = args.resample_times
 resample_num = args.resample_numbers
