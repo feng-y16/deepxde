@@ -1,10 +1,10 @@
 #!/bin/bash
 exp_name="schrodinger"
 bash clean.sh "$exp_name"
-num_train_samples_domain=10000
-resample_times=(1 2 3 4)
-resample_numbers=10000
-sigmas=(0.1 0.5 1.0)
+num_train_samples_domain=2000
+resample_times=(4 9 14 19)
+resample_numbers=2000
+sigmas=(0.1 0.3 1.0)
 GPU_index=0
 for i in $(seq 0 3); do
   num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))

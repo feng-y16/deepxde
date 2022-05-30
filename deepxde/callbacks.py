@@ -556,6 +556,7 @@ class PDEGradientAccumulativeResampler(Callback):
                     return tf.reduce_sum(loss, axis=1)
 
         else:
+            assert metric == "gradient"
             if utils.get_num_args(operator) == 2:
 
                 @tf.function
@@ -604,7 +605,9 @@ class PDEGradientAccumulativeResampler(Callback):
         else:
             x = self.model.data.train_x
         weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
-        target_indexes = jnp.argsort(-weight)[: 100]
+        sample_ratio = (self.current_sample_count - 1) / self.sample_count
+        top_k = int(len(weight) * (1 - sample_ratio))
+        target_indexes = jnp.argsort(-weight)[: top_k]
         weight = weight[target_indexes]
         weight /= jnp.sum(weight)
         x = jnp.expand_dims(x[target_indexes, :], axis=0)
