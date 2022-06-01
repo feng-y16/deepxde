@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
-    parser.add_argument("--sigma", type=float, default=1)
+    parser.add_argument("--sigma", type=float, default=0.2)
     return parser.parse_known_args()[0]
 
 
