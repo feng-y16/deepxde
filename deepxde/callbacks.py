@@ -1,4 +1,3 @@
-import pdb
 import sys
 import time
 
@@ -572,7 +571,7 @@ class PDEGradientAccumulativeResampler(Callback):
                                 loss += out ** 2
                     else:
                         loss = outs ** 2
-                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1) + tf.reduce_sum(loss, axis=1)
 
             elif utils.get_num_args(operator) == 3:
                 aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
@@ -590,7 +589,7 @@ class PDEGradientAccumulativeResampler(Callback):
                                 loss += out ** 2
                     else:
                         loss = outs ** 2
-                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1) + tf.reduce_sum(loss, axis=1)
 
         return utils.to_numpy(op(x))
 
@@ -605,8 +604,9 @@ class PDEGradientAccumulativeResampler(Callback):
         else:
             x = self.model.data.train_x
         weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
-        sample_ratio = (self.current_sample_count - 1) / self.sample_count
-        top_k = int(len(weight) * (1 - sample_ratio))
+        # sample_ratio = (self.current_sample_count - 1) / self.sample_count
+        # top_k = int(len(weight) * (1 - sample_ratio))
+        top_k = 10
         target_indexes = jnp.argsort(-weight)[: top_k]
         weight = weight[target_indexes]
         weight /= jnp.sum(weight)
