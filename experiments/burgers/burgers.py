@@ -183,7 +183,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
