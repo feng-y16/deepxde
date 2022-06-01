@@ -84,7 +84,13 @@ def test_nn(test_models=None):
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error in u: {:.3f}".format(l2_difference_u))
+        print("L2 relative error: {:.3f}".format(l2_difference_u))
+        top_k = 10
+        error = np.abs((y_exact - y_pred) / y_pred).reshape(-1)
+        error = np.where(error != error, 1, error)
+        error = np.where(error > 1, 1, error)
+        error = error[np.argpartition(-error, top_k)[: top_k]].mean()
+        print("Top {:} error: {:.3f}".format(top_k, error))
         if result_count % 2 == 0:
             ax1.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
             resampled_points = test_model.resampled_data

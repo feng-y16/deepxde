@@ -177,6 +177,20 @@ def test_nn(times=None, test_models=None):
             print("Mean residual: {:.3f}".format(residual))
             print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
                   .format(l2_difference_u, l2_difference_v, l2_difference_p))
+            top_k = 1000
+            error_u = np.abs((u_exact - u_pred) / u_pred).reshape(-1)
+            error_v = np.abs((v_exact - v_pred) / v_pred).reshape(-1)
+            error_p = np.abs((p_exact - p_pred) / p_pred).reshape(-1)
+            error_u = np.where(error_u != error_u, 1, error_u)
+            error_v = np.where(error_v != error_v, 1, error_v)
+            error_p = np.where(error_p != error_p, 1, error_p)
+            error_u = np.where(error_u > 1, 1, error_u)
+            error_v = np.where(error_v > 1, 1, error_v)
+            error_p = np.where(error_p > 1, 1, error_p)
+            error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
+            error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
+            error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
+            print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
             resampled_points = test_model.resampled_data
             if resampled_points is not None:
                 resampled_points = np.concatenate(resampled_points, axis=0)
@@ -204,6 +218,20 @@ def test_nn(times=None, test_models=None):
         print(legend)
         print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
               .format(l2_difference_u, l2_difference_v, l2_difference_p))
+        top_k = 1000
+        error_u = np.abs((u_exact - u_pred) / u_pred).reshape(-1)
+        error_v = np.abs((v_exact - v_pred) / v_pred).reshape(-1)
+        error_p = np.abs((p_exact - p_pred) / p_pred).reshape(-1)
+        error_u = np.where(error_u != error_u, 1, error_u)
+        error_v = np.where(error_v != error_v, 1, error_v)
+        error_p = np.where(error_p != error_p, 1, error_p)
+        error_u = np.where(error_u > 1, 1, error_u)
+        error_v = np.where(error_v > 1, 1, error_v)
+        error_p = np.where(error_p > 1, 1, error_p)
+        error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
+        error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
+        error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
+        print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
 
 
 warnings.filterwarnings("ignore")

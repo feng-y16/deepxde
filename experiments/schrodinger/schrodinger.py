@@ -99,6 +99,12 @@ def test_nn(test_models=None, losses=None):
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(l2_difference_u))
+        top_k = 1000
+        error = np.abs((y_exact - y_pred) / y_pred).reshape(-1)
+        error = np.where(error != error, 1, error)
+        error = np.where(error > 1, 1, error)
+        error = error[np.argpartition(-error, top_k)[: top_k]].mean()
+        print("Top {:} error: {:.3f}".format(top_k, error))
         parsed_legend = legend.split("_")
         if int(parsed_legend[1]) == 60000:
             continue
