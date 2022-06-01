@@ -4,7 +4,7 @@ bash clean.sh "$exp_name"
 num_train_samples_domain=2000
 resample_times=(4 9 14 19)
 resample_numbers=2000
-sigmas=(0.1 0.2 0.3)
+sigmas=(0.05 0.1 0.2)
 GPU_index=0
 for i in $(seq 0 3); do
   num_train_samples=$((num_train_samples_domain+resample_times[i]*resample_numbers))
