@@ -157,7 +157,7 @@ if len(load) == 0:
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=0.2, boundary=False)
+                                                                   sigma=0.1, boundary=False)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
         resampler = None
