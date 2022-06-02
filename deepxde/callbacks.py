@@ -496,7 +496,7 @@ class PDEResidualResampler(Callback):
 class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False):
+    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False, sample_times=5, top_k=100):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
@@ -506,6 +506,8 @@ class PDEGradientAccumulativeResampler(Callback):
         self.num_bcs_initial = None
         self.epochs_since_last_resample = 0
         self.boundary = boundary
+        self.sample_times = sample_times
+        self.top_k = top_k
         self.sampled_train_points = []
 
     def on_train_begin(self):
@@ -599,28 +601,35 @@ class PDEGradientAccumulativeResampler(Callback):
             return
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
-        if self.boundary:
-            x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
-        else:
-            x = self.model.data.train_x
-        weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
-        # sample_ratio = (self.current_sample_count - 1) / self.sample_count
-        # top_k = int(len(weight) * (1 - sample_ratio))
-        top_k = 10
-        target_indexes = jnp.argsort(-weight)[: top_k]
-        weight = weight[target_indexes]
-        weight /= jnp.sum(weight)
-        x = jnp.expand_dims(x[target_indexes, :], axis=0)
+        sampled_train_points = None
+        for i in range(self.sample_times):
+            if self.boundary:
+                x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
+            else:
+                x = self.model.data.train_x
+            weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
+            target_indexes = jnp.argsort(-weight)[: self.top_k]
+            weight = weight[target_indexes]
+            weight /= jnp.sum(weight)
+            x = jnp.expand_dims(x[target_indexes, :], axis=0)
 
-        weight = jnp.expand_dims(weight, axis=0)
-        dim = x.shape[-1]
-        measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
+            weight = jnp.expand_dims(weight, axis=0)
+            dim = x.shape[-1]
+            measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
-        def sample_prob(sample):
-            dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-            prob = jnp.sum(weight * 1 / jnp.sqrt(np.pi) / self.sigma *
-                           jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
-            return np.array(prob)
-
-        sampled_train_points = self.model.data.add_train_points(sample_prob, self.sample_num, boundary=self.boundary)
+            def sample_prob(sample):
+                dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+                prob = jnp.sum(weight * 1 / jnp.sqrt(np.pi) / self.sigma *
+                               jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
+                return np.array(prob)
+            if sampled_train_points is None:
+                sampled_train_points = self.model.data.add_train_points(sample_prob,
+                                                                        self.sample_num // 5,
+                                                                        boundary=self.boundary)
+            else:
+                sampled_train_points = np.concatenate((sampled_train_points,
+                                                       self.model.data.add_train_points(sample_prob,
+                                                                                        self.sample_num // 5,
+                                                                                        boundary=self.boundary)),
+                                                      axis=0)
         self.sampled_train_points.append(sampled_train_points)
