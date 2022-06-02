@@ -9,11 +9,12 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
+import tensorflow as tf
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=100000)
+    parser.add_argument("-ep", "--epochs", type=int, default=50000)
     parser.add_argument("-ntrd", "--num-train-samples-boundary", type=int, default=200)
     parser.add_argument("-rest", "--resample-times", type=int, default=4)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=200)
