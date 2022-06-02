@@ -99,10 +99,8 @@ def test_nn(test_models=None, losses=None):
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(l2_difference_u))
-        top_k = 1000
-        error = np.abs((y_exact - y_pred) / y_pred).reshape(-1)
-        error = np.where(error != error, 1, error)
-        error = np.where(error > 1, 1, error)
+        top_k = 10
+        error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
         parsed_legend = legend.split("_")
@@ -148,6 +146,7 @@ def test_nn(test_models=None, losses=None):
 
 
 warnings.filterwarnings("ignore")
+tf.config.threading.set_inter_op_parallelism_threads(4)
 args = parse_args()
 print(args)
 resample = args.resample

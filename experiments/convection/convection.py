@@ -80,10 +80,8 @@ def test_nn(test_models=None):
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(dde.metrics.l2_relative_error(y_exact, y_pred)))
-        top_k = 100
-        error = np.abs((y_exact - y_pred) / y_pred).reshape(-1)
-        error = np.where(error != error, 1, error)
-        error = np.where(error > 1, 1, error)
+        top_k = 10
+        error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
         ax = plt.subplot(gs[result_count, 0])
@@ -115,6 +113,7 @@ def test_nn(test_models=None):
 
 
 warnings.filterwarnings("ignore")
+tf.config.threading.set_inter_op_parallelism_threads(4)
 args = parse_args()
 print(args)
 resample = args.resample

@@ -127,7 +127,7 @@ def test_nn(times=None, test_models=None):
         X = np.hstack((X, t))
         exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
         if not os.path.isfile(exact_data_path):
-            u_exact, v_exact, p_exact = solve(num_test_samples, 100000, time, Re)
+            u_exact, v_exact, p_exact = solve(num_test_samples, 1000000, time, Re)
             exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
             with open(exact_data_path, "wb") as f_solver:
                 pickle.dump(exact_data, f_solver)
@@ -177,16 +177,10 @@ def test_nn(times=None, test_models=None):
             print("Mean residual: {:.3f}".format(residual))
             print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
                   .format(l2_difference_u, l2_difference_v, l2_difference_p))
-            top_k = 1000
-            error_u = np.abs((u_exact - u_pred) / u_pred).reshape(-1)
-            error_v = np.abs((v_exact - v_pred) / v_pred).reshape(-1)
-            error_p = np.abs((p_exact - p_pred) / p_pred).reshape(-1)
-            error_u = np.where(error_u != error_u, 1, error_u)
-            error_v = np.where(error_v != error_v, 1, error_v)
-            error_p = np.where(error_p != error_p, 1, error_p)
-            error_u = np.where(error_u > 1, 1, error_u)
-            error_v = np.where(error_v > 1, 1, error_v)
-            error_p = np.where(error_p > 1, 1, error_p)
+            top_k = 10
+            error_u = np.abs(u_exact - u_pred).reshape(-1)
+            error_v = np.abs(v_exact - v_pred).reshape(-1)
+            error_p = np.abs(p_exact - p_pred).reshape(-1)
             error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
             error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
             error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
@@ -218,16 +212,10 @@ def test_nn(times=None, test_models=None):
         print(legend)
         print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
               .format(l2_difference_u, l2_difference_v, l2_difference_p))
-        top_k = 1000
-        error_u = np.abs((u_exact - u_pred) / u_pred).reshape(-1)
-        error_v = np.abs((v_exact - v_pred) / v_pred).reshape(-1)
-        error_p = np.abs((p_exact - p_pred) / p_pred).reshape(-1)
-        error_u = np.where(error_u != error_u, 1, error_u)
-        error_v = np.where(error_v != error_v, 1, error_v)
-        error_p = np.where(error_p != error_p, 1, error_p)
-        error_u = np.where(error_u > 1, 1, error_u)
-        error_v = np.where(error_v > 1, 1, error_v)
-        error_p = np.where(error_p > 1, 1, error_p)
+        top_k = 10
+        error_u = np.abs(u_exact - u_pred).reshape(-1)
+        error_v = np.abs(v_exact - v_pred).reshape(-1)
+        error_p = np.abs(p_exact - p_pred).reshape(-1)
         error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
         error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
         error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
@@ -235,6 +223,7 @@ def test_nn(times=None, test_models=None):
 
 
 warnings.filterwarnings("ignore")
+tf.config.threading.set_inter_op_parallelism_threads(4)
 args = parse_args()
 print(args)
 resample = args.resample
