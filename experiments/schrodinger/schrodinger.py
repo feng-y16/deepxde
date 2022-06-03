@@ -105,8 +105,6 @@ def test_nn(test_models=None, losses=None):
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
         parsed_legend = legend.split("_")
-        if int(parsed_legend[1]) == 60000:
-            continue
         if parsed_legend[0] == "PINN":
             num_samples = int(parsed_legend[1])
             PINN_errors[num_samples] = l2_difference_u
@@ -129,7 +127,7 @@ def test_nn(test_models=None, losses=None):
     ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
         ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                     label=r"LWIS-$\sigma={:.1f}$".format(LWIS_sigma), linewidth=3)
+                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")

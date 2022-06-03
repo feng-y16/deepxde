@@ -1,9 +1,9 @@
 #!/bin/bash
 exp_name="schrodinger"
 bash clean.sh "$exp_name"
-num_train_samples_domain=2000
-resample_times=(4 9 14 19)
-resample_numbers=2000
+num_train_samples_domain=10000
+resample_times=(2 4 6 8)
+resample_numbers=10000
 sigmas=(0.05 0.1 0.2)
 GPU_index=0
 for i in $(seq 0 3); do
