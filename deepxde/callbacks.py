@@ -648,12 +648,13 @@ class PDEGradientAccumulativeResampler(Callback):
                 return np.array(prob)
             if sampled_train_points is None:
                 sampled_train_points = self.model.data.add_train_points(sample_prob,
-                                                                        self.sample_num // 5,
+                                                                        self.sample_num // self.sample_times,
                                                                         boundary=self.boundary)
             else:
-                sampled_train_points = np.concatenate((sampled_train_points,
-                                                       self.model.data.add_train_points(sample_prob,
-                                                                                        self.sample_num // 5,
-                                                                                        boundary=self.boundary)),
-                                                      axis=0)
+                sampled_train_points = \
+                    np.concatenate((sampled_train_points,
+                                    self.model.data.add_train_points(sample_prob,
+                                                                     self.sample_num // self.sample_times,
+                                                                     boundary=self.boundary)),
+                                   axis=0)
         self.sampled_train_points.append(sampled_train_points)
