@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
 import tensorflow as tf
+import datetime
 
 
 def parse_args():
@@ -114,6 +115,7 @@ def test_nn(test_models=None):
 
 
 warnings.filterwarnings("ignore")
+print(datetime.datetime.now())
 tf.config.threading.set_inter_op_parallelism_threads(4)
 args = parse_args()
 print(args)
