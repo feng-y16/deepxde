@@ -27,6 +27,7 @@ for data_multiplier in "${data_multipliers[@]}"; do
     GPU_index=$(((GPU_index+1) % 8))
   done
 done
+set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
@@ -34,6 +35,7 @@ do
   echo "$exp_name" "$num_jobs" "jobs remaining"
   sleep 2
 done
+set -e
 draw_load=()
 for data_multiplier in "${data_multipliers[@]}"; do
   num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))

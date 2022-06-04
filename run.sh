@@ -24,6 +24,7 @@ else
   CUDA_VISIBLE_DEVICES=7 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --resample &> experiments/"$exp_name"/LWIS.txt &
 fi
+set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
@@ -31,5 +32,6 @@ do
   echo "$exp_name" "$num_jobs" "jobs remaining"
   sleep 2
 done
+set -e
 bash draw.sh "$exp_name"
 echo "$exp_name" "complete"
