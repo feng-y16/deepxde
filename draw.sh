@@ -15,14 +15,13 @@ elif [ "$exp_name" == "schrodinger" ]; then
   data_multipliers=(1 2 4)
   sigmas=(0.05 0.10 0.20)
   draw_load=()
-  for i in $(seq ${#data_multipliers[@]}); do
-    num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))
+  for data_multiplier in "${data_multipliers[@]}"; do
+    num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
     draw_load=("${draw_load[@]}" "PINN_${num_train_samples}")
   done
-  for i in $(seq ${#data_multipliers[@]}); do
-    num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))
-    for j in $(seq ${#sigmas[@]}); do
-      sigma=${sigmas[j]}
+  for data_multiplier in "${data_multipliers[@]}"; do
+    num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
+    for sigma in "${sigmas[@]}"; do
       draw_load=("${draw_load[@]}" "LWIS_${num_train_samples}_${sigma}")
     done
   done
