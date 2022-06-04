@@ -136,10 +136,10 @@ geom = dde.geometry.TimeDomain(0, 1)
 ic = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
 
 if resample:
-    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 1, solution=func, num_test=1000)
+    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 2, solution=func, num_test=1000)
 else:
     data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain + resample_times * resample_num,
-                        1, solution=func, num_test=1000)
+                        2, solution=func, num_test=1000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
