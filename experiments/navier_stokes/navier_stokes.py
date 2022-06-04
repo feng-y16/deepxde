@@ -17,9 +17,9 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=10000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=40000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=10)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
     parser.add_argument("-nte", "--num-test-samples", type=int, default=101)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
@@ -129,7 +129,7 @@ def test_nn(times=None, test_models=None):
         X = np.hstack((X, t))
         exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
         if not os.path.isfile(exact_data_path):
-            u_exact, v_exact, p_exact = solve(num_test_samples, 1000000, time, Re)
+            u_exact, v_exact, p_exact = solve(num_test_samples, 100000, time, Re)
             exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
             with open(exact_data_path, "wb") as f_solver:
                 pickle.dump(exact_data, f_solver)
@@ -286,7 +286,7 @@ if len(load) == 0:
 
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 1, 1, 1, 1])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,

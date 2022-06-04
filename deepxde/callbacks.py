@@ -520,7 +520,8 @@ class PDEResidualResampler(Callback):
 class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False, sample_times=2, top_k=100):
+    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False,
+                 sample_times=2, top_k=100):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
@@ -550,7 +551,7 @@ class PDEGradientAccumulativeResampler(Callback):
                 @tf.function
                 def op(inputs):
                     y = self.model.net(inputs)
-                    outs = operator(inputs, y, aux_vars)
+                    outs = operator(inputs, y)
                     loss = None
                     if type(outs) == list:
                         for out in outs:
@@ -626,7 +627,11 @@ class PDEGradientAccumulativeResampler(Callback):
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
         sampled_train_points = None
-        for i in range(self.sample_times):
+        for i in range(self.sample_times + 1):
+            target_num_samples = self.sample_num // self.sample_times \
+                if i < self.sample_times else self.sample_num % self.sample_times
+            if target_num_samples == 0:
+                continue
             if self.boundary:
                 x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
             else:
@@ -643,18 +648,18 @@ class PDEGradientAccumulativeResampler(Callback):
 
             def sample_prob(sample):
                 dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-                prob = jnp.sum(weight * 1 / jnp.sqrt(np.pi) / self.sigma *
+                prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) / self.sigma *
                                jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
                 return np.array(prob)
             if sampled_train_points is None:
                 sampled_train_points = self.model.data.add_train_points(sample_prob,
-                                                                        self.sample_num // self.sample_times,
+                                                                        target_num_samples,
                                                                         boundary=self.boundary)
             else:
                 sampled_train_points = \
                     np.concatenate((sampled_train_points,
                                     self.model.data.add_train_points(sample_prob,
-                                                                     self.sample_num // self.sample_times,
+                                                                     target_num_samples,
                                                                      boundary=self.boundary)),
                                    axis=0)
         self.sampled_train_points.append(sampled_train_points)

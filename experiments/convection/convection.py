@@ -16,9 +16,9 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-boundary", type=int, default=200)
-    parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=200)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1500)
+    parser.add_argument("-rest", "--resample-times", type=int, default=5)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
@@ -123,7 +123,7 @@ resample = args.resample
 resample_times = args.resample_times
 resample_num = args.resample_numbers
 epochs = args.epochs
-num_train_samples_boundary = args.num_train_samples_boundary
+num_train_samples_domain = args.num_train_samples_domain
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
@@ -144,12 +144,12 @@ ic = dde.icbc.IC(
 
 if resample:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=10000, num_boundary=num_train_samples_boundary, num_initial=10000
+        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain, num_boundary=500, num_initial=10000
     )
 else:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=10000,
-        num_boundary=num_train_samples_boundary + resample_times * resample_num, num_initial=10000
+        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain + resample_times * resample_num,
+        num_boundary=500, num_initial=10000
     )
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
@@ -161,11 +161,11 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=0.1, boundary=False)
+                                                                   sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
         resampler = None

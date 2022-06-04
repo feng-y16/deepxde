@@ -16,9 +16,9 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=10000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=10000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=40000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=10)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
@@ -196,7 +196,7 @@ if len(load) == 0:
     net = dde.nn.FNN([d] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 100])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 1])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
