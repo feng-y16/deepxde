@@ -157,7 +157,7 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
@@ -191,7 +191,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
+        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
