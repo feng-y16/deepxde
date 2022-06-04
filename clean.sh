@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 exp_name=$1
 rm -rf experiments/"$exp_name"/*_info.pkl
 rm -rf experiments/"$exp_name"/*.png

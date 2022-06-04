@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 bash draw.sh burgers
 bash draw.sh convection
 bash draw.sh navier_stokes

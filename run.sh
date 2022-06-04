@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 exp_name=$1
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then

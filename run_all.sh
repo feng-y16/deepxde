@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 bash run.sh burgers &
 bash run.sh convection &
 bash run.sh navier_stokes &

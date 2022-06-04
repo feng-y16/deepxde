@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 exp_name=$1
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
@@ -14,13 +15,13 @@ elif [ "$exp_name" == "schrodinger" ]; then
   data_multipliers=(0.5 1.0 2.0)
   sigmas=(0.05 0.1 0.2)
   draw_load=()
-  for i in $(seq 0 2); do
+  for i in $(seq ${#data_multipliers[@]}); do
     num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))
     draw_load=("${draw_load[@]}" "PINN_${num_train_samples}")
   done
-  for i in $(seq 0 2); do
+  for i in $(seq ${#data_multipliers[@]}); do
     num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))
-    for j in $(seq 0 2); do
+    for j in $(seq ${#sigmas[@]}); do
       sigma=${sigmas[j]}
       draw_load=("${draw_load[@]}" "LWIS_${num_train_samples}_${sigma}")
     done

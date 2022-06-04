@@ -16,9 +16,9 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1500)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=750)
     parser.add_argument("-rest", "--resample-times", type=int, default=5)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=50)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
@@ -131,7 +131,7 @@ if resample:
 else:
     prefix = "PINN"
 print("resample:", resample)
-print("total data points:", num_train_samples_boundary + resample_times * resample_num)
+print("total data points:", num_train_samples_domain + resample_times * resample_num)
 
 geom = dde.geometry.Interval(0, 2 * np.pi)
 timedomain = dde.geometry.TimeDomain(0, 1)
@@ -161,7 +161,7 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
                                                                    sample_num=resample_num, sample_count=resample_times,
@@ -195,7 +195,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1])
+        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
