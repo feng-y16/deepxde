@@ -9,11 +9,11 @@ if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load PINN_10000.0 LWIS_10000.0 --re 10000 &> experiments/"$exp_name"/draw_10000.txt &
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=20000
+  num_train_samples_domain=10000
   resample_times=5
-  resample_numbers=2000
-  data_multipliers=(0.5 1.0 2.0)
-  sigmas=(0.05 0.1 0.2)
+  resample_numbers=1000
+  data_multipliers=(1 2 4)
+  sigmas=(0.05 0.10 0.20)
   draw_load=()
   for i in $(seq ${#data_multipliers[@]}); do
     num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))

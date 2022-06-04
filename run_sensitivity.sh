@@ -2,11 +2,11 @@
 set -e
 exp_name="schrodinger"
 bash clean.sh "$exp_name"
-num_train_samples_domain=20000
+num_train_samples_domain=10000
 resample_times=5
-resample_numbers=2000
-data_multipliers=(0.5 1.0 2.0)
-sigmas=(0.05 0.1 0.2)
+resample_numbers=1000
+data_multipliers=(1 2 4)
+sigmas=(0.05 0.10 0.20)
 GPU_index=0
 for i in $(seq ${#data_multipliers[@]}); do
   num_train_samples=$((data_multipliers[i] * (num_train_samples_domain+resample_times*resample_numbers)))
