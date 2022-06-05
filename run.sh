@@ -1,28 +1,44 @@
 #!/bin/bash
 set -e
 exp_name=$1
+GPUs=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits | \
+sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "," | tr -d "\n")
+num_GPUs=${#GPUs[@]}
+GPU_index=0
+if [ $num_GPUs -eq 0 ]; then
+  echo "No enough GPU memory"
+  exit 0
+fi
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
-  CUDA_VISIBLE_DEVICES=0 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 100 \
-  &> experiments/"$exp_name"/PINN_100.txt &
-  CUDA_VISIBLE_DEVICES=1 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample --re 100 \
-  &> experiments/"$exp_name"/LWIS_100.txt &
-  CUDA_VISIBLE_DEVICES=2 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 1000 \
-  &> experiments/"$exp_name"/PINN_1000.txt &
-  CUDA_VISIBLE_DEVICES=3 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample --re 1000 \
-  &> experiments/"$exp_name"/LWIS_1000.txt &
-  CUDA_VISIBLE_DEVICES=4 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --re 10000 \
-  &> experiments/"$exp_name"/PINN_10000.txt &
-  CUDA_VISIBLE_DEVICES=5 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py --resample --re 10000 \
-  &> experiments/"$exp_name"/LWIS_10000.txt &
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --re 100 &> experiments/"$exp_name"/PINN_100.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --resample --re 100 &> experiments/"$exp_name"/LWIS_100.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --re 1000 &> experiments/"$exp_name"/PINN_1000.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --resample --re 1000 &> experiments/"$exp_name"/LWIS_1000.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --re 10000 &> experiments/"$exp_name"/PINN_10000.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --resample --re 10000 &> experiments/"$exp_name"/LWIS_10000.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
   bash run_sensitivity.sh
   exit 0
 else
-  CUDA_VISIBLE_DEVICES=6 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   &> experiments/"$exp_name"/PINN.txt &
-  CUDA_VISIBLE_DEVICES=7 DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --resample &> experiments/"$exp_name"/LWIS.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
 set +e
 num_jobs=$(jobs | grep -c "")
