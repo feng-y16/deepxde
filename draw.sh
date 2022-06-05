@@ -2,7 +2,8 @@
 set -e
 exp_name=$1
 GPUs=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits | \
-sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "," | tr -d "\n")
+sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "\n")
+IFS="," read -r -a GPUs <<< "$GPUs"
 num_GPUs=${#GPUs[@]}
 GPU_index=0
 if [ $num_GPUs -eq 0 ]; then
