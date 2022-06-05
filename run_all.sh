@@ -9,6 +9,7 @@ sleep 10
 bash run.sh stiff_ode &
 sleep 10
 bash run.sh schrodinger &
+set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
 do
@@ -16,4 +17,5 @@ do
   echo "$num_jobs" "jobs remaining"
   sleep 20
 done
+set -e
 echo "all experiments complete"
