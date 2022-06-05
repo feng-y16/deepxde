@@ -1,8 +1,11 @@
 #!/bin/bash
 set -e
 bash run.sh burgers &
+sleep 10
 bash run.sh convection &
+sleep 10
 bash run.sh navier_stokes &
+sleep 10
 bash run.sh stiff_ode &
 num_jobs=$(jobs | grep -c "")
 set +e
