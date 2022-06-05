@@ -135,7 +135,7 @@ def test_nn(test_models=None, losses=None):
     ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_error in LWIS_errors.items():
         ax2.plot(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
-                     label=r"LWIS-$\sigma={:.1f}$".format(LWIS_sigma), linewidth=3)
+                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
     ax2.set_ylabel(r"$l_2$ Relative Error")
     ax2.legend(loc="best")

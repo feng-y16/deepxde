@@ -13,7 +13,7 @@ elif [ "$exp_name" == "schrodinger" ]; then
   resample_times=5
   resample_numbers=1000
   data_multipliers=(1 2 4)
-  sigmas=(0.05 0.10 0.20)
+  sigmas=(0.05 0.1 0.2)
   draw_load=()
   for data_multiplier in "${data_multipliers[@]}"; do
     num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
