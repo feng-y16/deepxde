@@ -13,6 +13,12 @@ fi
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --re 10 &> experiments/"$exp_name"/PINN_10.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --resample --re 10 &> experiments/"$exp_name"/LWIS_10.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --re 100 &> experiments/"$exp_name"/PINN_100.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
@@ -23,12 +29,6 @@ if [ "$exp_name" == "navier_stokes" ]; then
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --resample --re 1000 &> experiments/"$exp_name"/LWIS_1000.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --re 10000 &> experiments/"$exp_name"/PINN_10000.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample --re 10000 &> experiments/"$exp_name"/LWIS_10000.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
   bash run_sensitivity.sh

@@ -129,7 +129,7 @@ def test_nn(times=None, test_models=None):
         X = np.hstack((X, t))
         exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
         if not os.path.isfile(exact_data_path):
-            u_exact, v_exact, p_exact = solve(num_test_samples, 100000, time, Re)
+            u_exact, v_exact, p_exact = solve(num_test_samples, 20000, time, Re)
             exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
             with open(exact_data_path, "wb") as f_solver:
                 pickle.dump(exact_data, f_solver)
