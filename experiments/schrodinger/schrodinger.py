@@ -146,7 +146,7 @@ def test_nn(test_models=None, losses=None):
 
 warnings.filterwarnings("ignore")
 print(datetime.datetime.now())
-tf.config.threading.set_inter_op_parallelism_threads(4)
+tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
 print(args)
 resample = args.resample
