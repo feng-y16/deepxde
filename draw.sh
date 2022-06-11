@@ -21,10 +21,10 @@ if [ "$exp_name" == "navier_stokes" ]; then
   --load PINN_1000.0 LWIS_1000.0 --re 1000 &> experiments/"$exp_name"/draw_1000.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=10000
+  num_train_samples_domain=2000
   resample_times=5
-  resample_numbers=1000
-  data_multipliers=(1 4 16)
+  resample_numbers=2000
+  data_multipliers=(1 2 4)
   sigmas=(0.05 0.1 0.2)
   draw_load=()
   for data_multiplier in "${data_multipliers[@]}"; do

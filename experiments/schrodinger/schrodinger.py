@@ -16,9 +16,9 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=40000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=10)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=2000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=4)
+    parser.add_argument("-resn", "--resample-numbers", type=int, default=2000)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("-d", "--dimension", type=int, default=5)
@@ -91,8 +91,11 @@ def test_nn(test_models=None, losses=None):
     y_exact = func(X)
     PINN_errors = dict()
     LWIS_errors = dict()
+    PINN_top_k_errors = dict()
+    LWIS_top_k_errors = dict()
     PINN_losses = dict()
     LWIS_losses = dict()
+    top_k = 10
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
         pde_pred = test_model.predict(X, operator=pde)
@@ -100,7 +103,6 @@ def test_nn(test_models=None, losses=None):
         print(legend)
         print("Mean residual:", np.mean(np.absolute(pde_pred)))
         print("L2 relative error: {:.3f}".format(l2_difference_u))
-        top_k = 10
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
@@ -108,13 +110,16 @@ def test_nn(test_models=None, losses=None):
         if parsed_legend[0] == "PINN":
             num_samples = int(parsed_legend[1])
             PINN_errors[num_samples] = l2_difference_u
+            PINN_top_k_errors[num_samples] = error
             PINN_losses[num_samples] = losses[legend]
         else:
             num_samples = int(parsed_legend[1])
             LWIS_sigma = float(parsed_legend[2])
             if LWIS_sigma not in LWIS_errors.keys():
                 LWIS_errors[LWIS_sigma] = dict()
+                LWIS_top_k_errors[LWIS_sigma] = dict()
             LWIS_errors[LWIS_sigma][num_samples] = l2_difference_u
+            LWIS_top_k_errors[LWIS_sigma][num_samples] = error
             if num_samples not in LWIS_losses.keys():
                 LWIS_losses[num_samples] = dict()
             LWIS_losses[num_samples][LWIS_sigma] = losses[legend]
@@ -122,7 +127,7 @@ def test_nn(test_models=None, losses=None):
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
-    num_samples_for_loss = 30000
+    num_samples_for_loss = PINN_losses.__iter__().__next__()
     PINN_loss = PINN_losses[num_samples_for_loss]
     ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
@@ -132,15 +137,26 @@ def test_nn(test_models=None, losses=None):
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
 
-    ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
-    for LWIS_sigma, LWIS_error in LWIS_errors.items():
-        ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+    # ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
+    # for LWIS_sigma, LWIS_error in LWIS_errors.items():
+    #     ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+    #                  label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    # ax2.set_xlabel("Number of Training Samples")
+    # ax2.set_ylabel(r"$l_2$ Relative Error")
+    # ax2.legend(loc="best")
+    # plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
+    # plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+    # plt.close()
+
+    ax2.plot(list(PINN_top_k_errors.keys()), list(PINN_top_k_errors.values()), marker="o", label="PINN", linewidth=3)
+    for LWIS_sigma, LWIS_top_k_error in LWIS_top_k_errors.items():
+        ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
                      label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
-    ax2.set_ylabel(r"$l_2$ Relative Error")
+    ax2.set_ylabel("Top {:} Error".format(top_k))
     ax2.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
-    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+    plt.savefig(os.path.join(save_dir, "sensitivity_top{:}.pdf".format(top_k)))
+    plt.savefig(os.path.join(save_dir, "sensitivity_top{:}.png".format(top_k)))
     plt.close()
 
 

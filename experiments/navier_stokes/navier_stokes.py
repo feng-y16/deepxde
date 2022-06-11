@@ -17,10 +17,10 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-ep", "--epochs", type=int, default=50000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=40000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=10)
+    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
+    parser.add_argument("-rest", "--resample-times", type=int, default=4)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
-    parser.add_argument("-nte", "--num-test-samples", type=int, default=1001)
+    parser.add_argument("-nte", "--num-test-samples", type=int, default=200)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("--re", type=float, default=100)
@@ -129,7 +129,7 @@ def test_nn(times=None, test_models=None):
         X = np.hstack((X, t))
         exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
         if not os.path.isfile(exact_data_path):
-            u_exact, v_exact, p_exact = solve(num_test_samples, 50000, time, Re)
+            u_exact, v_exact, p_exact = solve(num_test_samples, 20000, time, Re)
             exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
             with open(exact_data_path, "wb") as f_solver:
                 pickle.dump(exact_data, f_solver)

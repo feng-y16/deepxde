@@ -521,7 +521,7 @@ class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False,
-                 sample_times=20, top_k=1000):
+                 sample_times=5, top_k=1000):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
@@ -627,15 +627,21 @@ class PDEGradientAccumulativeResampler(Callback):
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
         sampled_train_points = None
+        if self.boundary:
+            random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2, random="pseudo")
+        else:
+            random_points = self.model.data.geom.random_points(self.sample_num // 2, random="pseudo")
         for i in range(self.sample_times + 1):
-            target_num_samples = self.sample_num // self.sample_times \
-                if i < self.sample_times else self.sample_num % self.sample_times
+            target_num_samples = (self.sample_num // 2) // self.sample_times \
+                if i < self.sample_times else (self.sample_num // 2) % self.sample_times
             if target_num_samples == 0:
                 continue
             if self.boundary:
                 x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
+                x = np.concatenate((x, random_points), axis=0)
             else:
                 x = self.model.data.train_x
+                x = np.concatenate((x, random_points), axis=0)
             weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
             target_indexes = jnp.argsort(-weight)[: self.top_k]
             weight = weight[target_indexes]
@@ -644,12 +650,11 @@ class PDEGradientAccumulativeResampler(Callback):
 
             weight = jnp.expand_dims(weight, axis=0)
             dim = x.shape[-1]
-            measure = dim * np.pi ** (dim / 2) / (scipy.special.gamma(dim / 2 + 1))
 
             def sample_prob(sample):
                 dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-                prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) / self.sigma *
-                               jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)) / (measure * dist ** (dim - 1)), axis=1)
+                prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) ** dim / self.sigma ** dim *
+                               jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)), axis=1)
                 return np.array(prob)
             if sampled_train_points is None:
                 sampled_train_points = self.model.data.add_train_points(sample_prob,
@@ -662,4 +667,5 @@ class PDEGradientAccumulativeResampler(Callback):
                                                                      target_num_samples,
                                                                      boundary=self.boundary)),
                                    axis=0)
+        self.model.data.add_train_points(None, None, boundary=self.boundary, train_x=random_points)
         self.sampled_train_points.append(sampled_train_points)

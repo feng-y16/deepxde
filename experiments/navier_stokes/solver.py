@@ -135,7 +135,7 @@ from tqdm import tqdm
 DOMAIN_SIZE = 1.0
 DENSITY = 1.0
 HORIZONTAL_VELOCITY_TOP = 1.0
-N_PRESSURE_POISSON_ITERATIONS = 500
+N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
 
@@ -203,6 +203,7 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
     if time_step_length > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
         raise RuntimeError("Stability is not guarenteed")
 
+    pbar = tqdm(total=n_iterations)
     for _ in range(n_iterations):
         d_u_prev__d_x = central_difference_x(u_prev)
         d_u_prev__d_y = central_difference_y(u_prev)
@@ -328,7 +329,7 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         u_prev = u_next
         v_prev = v_next
         p_prev = p_next
-
+        pbar.update()
     return u_prev.reshape(-1), v_prev.reshape(-1), p_prev.reshape(-1)
 
 

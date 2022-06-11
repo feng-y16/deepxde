@@ -224,9 +224,10 @@ class PDE(Data):
             X = np.array(list(filter(is_not_excluded, X)))
         return X
 
-    def add_train_points(self, sample_prob, sample_num, boundary=False):
+    def add_train_points(self, sample_prob, sample_num, boundary=False, train_x=None):
         if boundary:
-            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+            if train_x is None:
+                train_x = self.sample_train_points(sample_prob, sample_num, boundary)
             self.train_x_all = np.concatenate((self.train_x_all, train_x))
             self.num_boundary += len(train_x)
             x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
@@ -244,7 +245,8 @@ class PDE(Data):
                     config.real(np)
                 )
         else:
-            train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+            if train_x is None:
+                train_x = self.sample_train_points(sample_prob, sample_num, boundary)
             self.train_x_all = np.concatenate((self.train_x_all, train_x))
             if self.pde is not None:
                 self.train_x = np.vstack((self.train_x, train_x))
