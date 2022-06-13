@@ -628,9 +628,11 @@ class PDEGradientAccumulativeResampler(Callback):
         self.epochs_since_last_resample = 0
         sampled_train_points = None
         if self.boundary:
-            random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2, random="pseudo")
+            random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2 + self.sample_num % 2,
+                                                                        random="pseudo")
         else:
-            random_points = self.model.data.geom.random_points(self.sample_num // 2, random="pseudo")
+            random_points = self.model.data.geom.random_points(self.sample_num // 2 + self.sample_num % 2,
+                                                               random="pseudo")
         for i in range(self.sample_times + 1):
             target_num_samples = (self.sample_num // 2) // self.sample_times \
                 if i < self.sample_times else (self.sample_num // 2) % self.sample_times

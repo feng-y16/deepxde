@@ -136,18 +136,29 @@ def test_nn(test_models=None, losses=None):
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
-
-    # ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
-    # for LWIS_sigma, LWIS_error in LWIS_errors.items():
-    #     ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
-    #                  label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    # ax2.set_xlabel("Number of Training Samples")
-    # ax2.set_ylabel(r"$l_2$ Relative Error")
-    # ax2.legend(loc="best")
-    # plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
-    # plt.savefig(os.path.join(save_dir, "sensitivity.png"))
-    # plt.close()
-
+    ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
+    for LWIS_sigma, LWIS_error in LWIS_errors.items():
+        ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    ax2.set_xlabel("Number of Training Samples")
+    ax2.set_ylabel(r"$l_2$ Relative Error")
+    ax2.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
+    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+    plt.close()
+    plt.figure(figsize=(12, 4))
+    gs = GridSpec(1, 2)
+    ax1 = plt.subplot(gs[0, 0])
+    ax2 = plt.subplot(gs[0, 1])
+    num_samples_for_loss = PINN_losses.__iter__().__next__()
+    PINN_loss = PINN_losses[num_samples_for_loss]
+    ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
+    for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
+        ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Testing Loss")
+    ax1.legend(loc="best")
     ax2.plot(list(PINN_top_k_errors.keys()), list(PINN_top_k_errors.values()), marker="o", label="PINN", linewidth=3)
     for LWIS_sigma, LWIS_top_k_error in LWIS_top_k_errors.items():
         ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
