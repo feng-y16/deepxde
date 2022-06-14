@@ -5,4 +5,4 @@ if [ $# -gt 0 ]; then
 else
   match_phrase="python"
 fi
-pgrep -u fengyao "$match_phrase" | awk "{print \"kill \"\$1}" | sh
+pgrep -u ${USER} "$match_phrase" | awk "{print \"kill \"\$1}" | sh
