@@ -13,22 +13,28 @@ fi
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --re 100 &> experiments/"$exp_name"/PINN_100.txt &
+  --re 10 --num-train-samples-domain 100 --resample-numbers 100 --num-test-samples 200 \
+  &> experiments/"$exp_name"/PINN_10.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample --re 100 &> experiments/"$exp_name"/LWIS_100.txt &
+  --resample --re 10 --num-train-samples-domain 100 --resample-numbers 100 --num-test-samples 200 \
+  &> experiments/"$exp_name"/LWIS_10.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --re 1000 &> experiments/"$exp_name"/PINN_1000.txt &
+  --re 100 --num-train-samples-domain 1000 --resample-numbers 1000 --num-test-samples 200 \
+  &> experiments/"$exp_name"/PINN_100.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample --re 1000 &> experiments/"$exp_name"/LWIS_1000.txt &
+  --resample --re 100 --num-train-samples-domain 1000 --resample-numbers 1000 --num-test-samples 200 \
+  &> experiments/"$exp_name"/LWIS_100.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --re 10000 &> experiments/"$exp_name"/PINN_10000.txt &
+  --re 1000 --num-train-samples-domain 10000 --resample-numbers 10000 --num-test-samples 200 \
+  &> experiments/"$exp_name"/PINN_1000.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample --re 10000 &> experiments/"$exp_name"/LWIS_10000.txt &
+  --resample --re 1000 --num-train-samples-domain 10000 --resample-numbers 10000 --num-test-samples 200 \
+  &> experiments/"$exp_name"/LWIS_1000.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
   bash run_sensitivity.sh

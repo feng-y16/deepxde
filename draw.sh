@@ -12,18 +12,21 @@ if [ $num_GPUs -eq 0 ]; then
 fi
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_100.0 LWIS_100.0 --re 100 &> experiments/"$exp_name"/draw_100.txt &
+  --load PINN_10.0 LWIS_10.0 --re 10 --num-train-samples-domain 100 --resample-numbers 100 \
+  --num-test-samples 200 &> experiments/"$exp_name"/draw_10.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_1000.0 LWIS_1000.0 --re 1000 &> experiments/"$exp_name"/draw_1000.txt &
+  --load PINN_100.0 LWIS_100.0 --re 100 --num-train-samples-domain 1000 --resample-numbers 1000 \
+  --num-test-samples 200 &> experiments/"$exp_name"/draw_100.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_10000.0 LWIS_10000.0 --re 10000 &> experiments/"$exp_name"/draw_10000.txt &
+  --load PINN_1000.0 LWIS_1000.0 --re 1000 --num-train-samples-domain 10000 --resample-numbers 10000 \
+  --num-test-samples 200 &> experiments/"$exp_name"/draw_1000.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=2000
+  num_train_samples_domain=1000
   resample_times=5
-  resample_numbers=2000
+  resample_numbers=1000
   data_multipliers=(1 2 4)
   sigmas=(0.05 0.1 0.2)
   draw_load=()
