@@ -130,6 +130,7 @@ IMPORTANT: Take care to select a timestep that ensures stability
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from tqdm import tqdm
 
 DOMAIN_SIZE = 1.0
@@ -139,25 +140,26 @@ N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
 
-def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
+def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_steps=10000,
+          device=torch.device("cuda")):
     time_step_length = time_length / n_iterations
     if time_length == 0:
         n_iterations = 0
     kinematic_viscosity = 1 / re
     element_length = DOMAIN_SIZE / (n_points - 1)
-    x = np.linspace(0.0, DOMAIN_SIZE, n_points)
-    y = np.linspace(0.0, DOMAIN_SIZE, n_points)
+    x = torch.linspace(0.0, DOMAIN_SIZE, n_points, device=device)
+    y = torch.linspace(0.0, DOMAIN_SIZE, n_points, device=device)
 
-    X, Y = np.meshgrid(x, y)
+    X, Y = torch.meshgrid(x, y, indexing='ij')
 
-    u_prev = np.zeros_like(X)
-    v_prev = np.zeros_like(X)
-    p_prev = np.zeros_like(X)
+    u_prev = torch.zeros_like(X)
+    v_prev = torch.zeros_like(X)
+    p_prev = torch.zeros_like(X)
 
     p_next = None
 
     def central_difference_x(f):
-        diff = np.zeros_like(f)
+        diff = torch.zeros_like(f)
         diff[1:-1, 1:-1] = (
                                    f[1:-1, 2:]
                                    -
@@ -168,7 +170,7 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         return diff
 
     def central_difference_y(f):
-        diff = np.zeros_like(f)
+        diff = torch.zeros_like(f)
         diff[1:-1, 1:-1] = (
                                    f[2:, 1:-1]
                                    -
@@ -179,7 +181,7 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         return diff
 
     def laplace(f):
-        diff = np.zeros_like(f)
+        diff = torch.zeros_like(f)
         diff[1:-1, 1:-1] = (
                                    f[1:-1, 0:-2]
                                    +
@@ -204,7 +206,8 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         raise RuntimeError("Stability is not guarenteed")
 
     pbar = tqdm(total=n_iterations)
-    for _ in range(n_iterations):
+    results = {}
+    for i in range(n_iterations):
         d_u_prev__d_x = central_difference_x(u_prev)
         d_u_prev__d_y = central_difference_y(u_prev)
         d_v_prev__d_x = central_difference_x(v_prev)
@@ -269,7 +272,7 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         )
 
         for _ in range(N_PRESSURE_POISSON_ITERATIONS):
-            p_next = np.zeros_like(p_prev)
+            p_next = torch.zeros_like(p_prev)
             p_next[1:-1, 1:-1] = 1 / 4 * (
                     +
                     p_prev[1:-1, 0:-2]
@@ -325,12 +328,30 @@ def solve(n_points=1000, n_iterations=10000, time_length=1, re=100):
         v_next[:, -1] = 0.0
         v_next[-1, :] = 0.0
 
+        if (i + 1) % record_steps == 0:
+            time = (i + 1) * time_step_length
+            results[time] = {}
+            results[time]["u"] = u_next.detach().cpu().numpy()
+            results[time]["v"] = v_next.detach().cpu().numpy()
+            results[time]["p"] = p_next.detach().cpu().numpy()
+            # levels = 20
+            # x, y = np.meshgrid(np.linspace(0, 1, n_points), np.linspace(0, 1, n_points))
+            # fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
+            # ax.contour(x, y, results[time]["v"], colors="k", linewidths=0.2, levels=levels)
+            # ax.contourf(x, y, results[time]["v"], cmap="rainbow", levels=levels)
+            # ax.set_xlim(0, 1)
+            # ax.set_ylim(0, 1)
+            # m = plt.cm.ScalarMappable(cmap="rainbow")
+            # m.set_array(results[time]["v"])
+            # plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
+            # plt.savefig("{:.1f}_{:.3f}_v.png".format(re, time))
+
         # Advance in time
         u_prev = u_next
         v_prev = v_next
         p_prev = p_next
         pbar.update()
-    return u_prev.reshape(-1), v_prev.reshape(-1), p_prev.reshape(-1)
+    return results
 
 
 if __name__ == "__main__":

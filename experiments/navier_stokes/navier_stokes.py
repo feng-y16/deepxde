@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
     parser.add_argument("-rest", "--resample-times", type=int, default=4)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
-    parser.add_argument("-nte", "--num-test-samples", type=int, default=200)
+    parser.add_argument("-nte", "--num-test-samples", type=int, default=512)
     parser.add_argument("-r", "--resample", action="store_true", default=False)
     parser.add_argument("-l", "--load", nargs='+', default=[])
     parser.add_argument("--re", type=float, default=100)
@@ -100,15 +100,15 @@ def plot_loss_combined(losses):
 
 def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, resampled_points=None):
     ax = plt.subplot(grid)
-    ax.contour(data_x, data_y, data_z, colors='k', linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
-    ax.contourf(data_x, data_y, data_z, cmap='rainbow', levels=levels, vmin=v_min, vmax=v_max)
+    ax.contour(data_x, data_y, data_z, colors="k", linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
+    ax.contourf(data_x, data_y, data_z, cmap="rainbow", levels=levels, vmin=v_min, vmax=v_max)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_title(title)
-    m = plt.cm.ScalarMappable(cmap='rainbow', norm=Normalize(vmin=v_min, vmax=v_max))
+    m = plt.cm.ScalarMappable(cmap="rainbow", norm=Normalize(vmin=v_min, vmax=v_max))
     m.set_array(data_z)
     m.set_clim(v_min, v_max)
-    cbar = plt.colorbar(m, pad=0.03, aspect=25, format='%.0e')
+    cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
     if resampled_points is not None:
         ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker=',', s=1, color='y')
@@ -122,23 +122,22 @@ def test_nn(times=None, test_models=None):
     test_models_pred_exact = {}
     for legend, test_model in test_models.items():
         test_models_pred_exact[legend] = [None, None, None, None, None, None]
+    exact_data_path = os.path.join(save_dir, "re_{:}.pkl".format(Re))
+    if not os.path.isfile(exact_data_path):
+        exact_data = solve(n_points=num_test_samples, n_iterations=200000, re=Re)
+        with open(exact_data_path, "wb") as f_solver:
+            pickle.dump(exact_data, f_solver)
+    else:
+        with open(exact_data_path, "rb") as f_solver:
+            exact_data = pickle.load(f_solver)
     for time in times:
         x, y = np.meshgrid(np.linspace(0, 1, num_test_samples), np.linspace(0, 1, num_test_samples))
         X = np.vstack((np.ravel(x), np.ravel(y))).T
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
-        exact_data_path = os.path.join(save_dir, "time_{:}_re_{:}.pkl".format(time, Re))
-        if not os.path.isfile(exact_data_path):
-            u_exact, v_exact, p_exact = solve(num_test_samples, 20000, time, Re)
-            exact_data = {"u": u_exact, "v": v_exact, "p": p_exact}
-            with open(exact_data_path, "wb") as f_solver:
-                pickle.dump(exact_data, f_solver)
-        else:
-            with open(exact_data_path, "rb") as f_solver:
-                exact_data = pickle.load(f_solver)
-            u_exact = exact_data["u"]
-            v_exact = exact_data["v"]
-            p_exact = exact_data["p"]
+        u_exact = exact_data[time]["u"]
+        v_exact = exact_data[time]["v"]
+        p_exact = exact_data[time]["p"]
         p_exact -= np.mean(p_exact)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
