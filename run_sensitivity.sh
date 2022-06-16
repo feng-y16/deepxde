@@ -11,10 +11,10 @@ if [ $num_GPUs -eq 0 ]; then
   exit 0
 fi
 bash clean.sh "$exp_name"
-num_train_samples_domain=1000
+num_train_samples_domain=500
 resample_times=4
-resample_numbers=1000
-data_multipliers=(1 2 4)
+resample_numbers=500
+data_multipliers=(1 4 16)
 sigmas=(0.05 0.1 0.2)
 for data_multiplier in "${data_multipliers[@]}"; do
   num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))

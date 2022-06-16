@@ -135,9 +135,9 @@ def test_nn(times=None, test_models=None):
         X = np.vstack((np.ravel(x), np.ravel(y))).T
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
-        u_exact = exact_data[time]["u"]
-        v_exact = exact_data[time]["v"]
-        p_exact = exact_data[time]["p"]
+        u_exact = exact_data[time]["u"].reshape(-1)
+        v_exact = exact_data[time]["v"].reshape(-1)
+        p_exact = exact_data[time]["p"].reshape(-1)
         p_exact -= np.mean(p_exact)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
