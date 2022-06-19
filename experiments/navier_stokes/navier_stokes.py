@@ -281,7 +281,7 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
-    net = dde.nn.FNN([3] + 4 * [50] + [3], "tanh", "Glorot normal")
+    net = dde.nn.FNN([3] + [50] * 10 + [3], "tanh", "Glorot normal")
 
     model = dde.Model(data, net)
 

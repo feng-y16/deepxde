@@ -147,7 +147,7 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
-    layer_size = [1] + [50] * 3 + [1]
+    layer_size = [1] + [20] * 3 + [1]
     activation = "tanh"
     initializer = "Glorot uniform"
     net = dde.nn.FNN(layer_size, activation, initializer)
