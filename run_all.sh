@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
-bash run.sh burgers &
+./run.sh burgers &
 sleep 10
-bash run.sh convection &
+./run.sh convection &
 sleep 10
-bash run.sh navier_stokes &
+./run.sh navier_stokes &
 sleep 10
-bash run.sh stiff_ode &
+./run.sh stiff_ode &
 sleep 10
-bash run.sh schrodinger &
+./run.sh schrodinger &
 set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]

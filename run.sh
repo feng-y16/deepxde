@@ -56,5 +56,5 @@ do
   sleep 2
 done
 set -e
-bash draw.sh "$exp_name"
+./draw.sh "$exp_name"
 echo "$exp_name" "complete"

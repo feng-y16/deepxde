@@ -6,7 +6,7 @@ sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "\n")
 IFS="," read -r -a GPUs <<< "$GPUs"
 num_GPUs=${#GPUs[@]}
 GPU_index=0
-if [ $num_GPUs -eq 0 ]; then
+if [ "$num_GPUs" -eq 0 ]; then
   echo "No enough GPU memory"
   exit 0
 fi
