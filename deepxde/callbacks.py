@@ -521,7 +521,7 @@ class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False,
-                 sample_times=5, top_k=1000):
+                 sample_times=5, top_k=100, random=False):
         super().__init__()
         self.period = period
         self.sample_num = sample_num
@@ -533,6 +533,7 @@ class PDEGradientAccumulativeResampler(Callback):
         self.boundary = boundary
         self.sample_times = sample_times
         self.top_k = top_k
+        self.random = random
         self.sampled_train_points = []
 
     def on_train_begin(self):
@@ -627,47 +628,56 @@ class PDEGradientAccumulativeResampler(Callback):
         self.current_sample_count += 1
         self.epochs_since_last_resample = 0
         sampled_train_points = None
-        if self.boundary:
-            random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2 + self.sample_num % 2,
-                                                                        random="pseudo")
-        else:
-            random_points = self.model.data.geom.random_points(self.sample_num // 2 + self.sample_num % 2,
-                                                               random="pseudo")
-        for i in range(self.sample_times + 1):
-            target_num_samples = (self.sample_num // 2) // self.sample_times \
-                if i < self.sample_times else (self.sample_num // 2) % self.sample_times
-            if target_num_samples == 0:
-                continue
+        if not self.random:
             if self.boundary:
-                x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
-                x = np.concatenate((x, random_points), axis=0)
+                random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2 + self.sample_num % 2,
+                                                                            random="pseudo")
             else:
-                x = self.model.data.train_x
-                x = np.concatenate((x, random_points), axis=0)
-            weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
-            target_indexes = jnp.argsort(-weight)[: self.top_k]
-            weight = weight[target_indexes]
-            weight /= jnp.sum(weight)
-            x = jnp.expand_dims(x[target_indexes, :], axis=0)
+                random_points = self.model.data.geom.random_points(self.sample_num // 2 + self.sample_num % 2,
+                                                                   random="pseudo")
+            for i in range(self.sample_times + 1):
+                target_num_samples = (self.sample_num // 2) // self.sample_times \
+                    if i < self.sample_times else (self.sample_num // 2) % self.sample_times
+                if target_num_samples == 0:
+                    continue
+                if self.boundary:
+                    x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
+                    x = np.concatenate((x, random_points), axis=0)
+                else:
+                    x = self.model.data.train_x
+                    x = np.concatenate((x, random_points), axis=0)
+                weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
+                target_indexes = jnp.argsort(-weight)[: self.top_k]
+                weight = weight[target_indexes]
+                weight /= jnp.sum(weight)
+                x = jnp.expand_dims(x[target_indexes, :], axis=0)
 
-            weight = jnp.expand_dims(weight, axis=0)
-            dim = x.shape[-1]
+                weight = jnp.expand_dims(weight, axis=0)
+                dim = x.shape[-1]
 
-            def sample_prob(sample):
-                dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
-                prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) ** dim / self.sigma ** dim *
-                               jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)), axis=1)
-                return np.array(prob)
-            if sampled_train_points is None:
-                sampled_train_points = self.model.data.add_train_points(sample_prob,
-                                                                        target_num_samples,
-                                                                        boundary=self.boundary)
+                def sample_prob(sample):
+                    dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+                    prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) ** dim / self.sigma ** dim *
+                                   jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)), axis=1)
+                    return np.array(prob)
+                if sampled_train_points is None:
+                    sampled_train_points = self.model.data.add_train_points(sample_prob,
+                                                                            target_num_samples,
+                                                                            boundary=self.boundary)
+                else:
+                    sampled_train_points = \
+                        np.concatenate((sampled_train_points,
+                                        self.model.data.add_train_points(sample_prob,
+                                                                         target_num_samples,
+                                                                         boundary=self.boundary)),
+                                       axis=0)
+            total_sampled_points = torch.cat((random_points, sampled_train_points), dim=1)
+            self.model.data.set_train_points(train_x=total_sampled_points, boundary=self.boundary)
+            self.sampled_train_points.append(total_sampled_points)
+        else:
+            if self.boundary:
+                random_points = self.model.data.geom.random_boundary_points(self.sample_num, random="pseudo")
             else:
-                sampled_train_points = \
-                    np.concatenate((sampled_train_points,
-                                    self.model.data.add_train_points(sample_prob,
-                                                                     target_num_samples,
-                                                                     boundary=self.boundary)),
-                                   axis=0)
-        self.model.data.add_train_points(None, None, boundary=self.boundary, train_x=random_points)
-        self.sampled_train_points.append(sampled_train_points)
+                random_points = self.model.data.geom.random_points(self.sample_num, random="pseudo")
+            self.model.data.set_train_points(train_x=random_points, boundary=self.boundary)
+            self.sampled_train_points.append(random_points)
