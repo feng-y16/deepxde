@@ -671,7 +671,7 @@ class PDEGradientAccumulativeResampler(Callback):
                                                                          target_num_samples,
                                                                          boundary=self.boundary)),
                                        axis=0)
-            total_sampled_points = torch.cat((random_points, sampled_train_points), dim=1)
+            total_sampled_points = np.concatenate((random_points, sampled_train_points), axis=0)
             self.model.data.set_train_points(train_x=total_sampled_points, boundary=self.boundary)
             self.sampled_train_points.append(total_sampled_points)
         else:
