@@ -141,16 +141,10 @@ bc = dde.icbc.PeriodicBC(geomtime, 0, lambda _, on_boundary: on_boundary)
 ic = dde.icbc.IC(
     geomtime, lambda x: np.sin(x[:, 0:1]), lambda _, on_initial: on_initial
 )
-
-if resample:
-    data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain, num_boundary=500, num_initial=10000
-    )
-else:
-    data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain + resample_times * resample_num,
-        num_boundary=500, num_initial=10000
-    )
+data = dde.data.TimePDE(
+    geomtime, pde, [bc, ic], num_domain=num_train_samples_domain + resample_times * resample_num,
+    num_boundary=500, num_initial=10000
+)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -168,8 +162,10 @@ if len(load) == 0:
                                                                    sigma=0.1)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
-        resampler = None
-        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
+                                                                   sample_num=resample_num, sample_count=resample_times,
+                                                                   sigma=0.1, random=True)
+        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,

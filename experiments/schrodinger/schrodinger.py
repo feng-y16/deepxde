@@ -207,12 +207,8 @@ print("total data points:", num_train_samples_domain + resample_times * resample
 geom = dde.geometry.Hypercube([0 for _ in range(d)], [2 * np.pi for _ in range(d)])
 
 bc = dde.icbc.DirichletBC(geom, func, lambda _, on_boundary: on_boundary)
-
-if resample:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=10000, num_test=100000)
-else:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
-                        num_boundary=10000, num_test=100000)
+data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
+                    num_boundary=10000, num_test=100000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -230,8 +226,10 @@ if len(load) == 0:
                                                                    sigma=sigma)
         loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     else:
-        resampler = None
-        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
+                                                                   sample_num=resample_num, sample_count=resample_times,
+                                                                   sigma=sigma, random=True)
+        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
     resampled_data = resampler.sampled_train_points if resampler is not None else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
