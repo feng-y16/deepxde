@@ -241,7 +241,7 @@ class PDE(Data):
                 else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
             )
             if self.pde is not None:
-                self.train_x = np.vstack((self.train_x, self.bcs[0].collocation_points(train_x)))
+                self.train_x = np.vstack((self.train_x, self.train_x_bc))
                 self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
@@ -263,7 +263,7 @@ class PDE(Data):
 
     def set_train_points(self, train_x, boundary=False):
         if boundary:
-            self.train_x_all = train_x
+            self.train_x_all = np.concatenate((train_x, self.train_x_all[-self.num_domain:, :]), axis=1)
             self.num_boundary = len(train_x)
             x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
             self.num_bcs = list(map(len, x_bcs))
@@ -273,17 +273,17 @@ class PDE(Data):
                 else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
             )
             if self.pde is not None:
-                self.train_x = np.vstack((self.train_x, self.bcs[0].collocation_points(train_x)))
+                self.train_x = np.vstack((self.bcs[0].collocation_points(train_x), self.train_x_bc))
                 self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)
                 )
         else:
-            self.train_x_all = train_x
+            self.train_x_all = np.vstack((self.train_x_all[:-self.num_domain, :], train_x))
             self.num_domain = len(train_x)
             if self.pde is not None:
-                self.train_x = train_x
+                self.train_x = np.vstack((self.train_x_bc, train_x))
                 self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
