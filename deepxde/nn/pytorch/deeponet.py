@@ -1,7 +1,8 @@
+import torch
+
 from .fnn import FNN
 from .nn import NN
 from .. import activations
-from ...backend import tf
 
 
 class DeepONetCartesianProd(NN):
@@ -34,30 +35,19 @@ class DeepONetCartesianProd(NN):
             self.activation_trunk = activations.get(activation["trunk"])
         else:
             activation_branch = self.activation_trunk = activations.get(activation)
-
         if callable(layer_sizes_branch[1]):
             # User-defined network
             self.branch = layer_sizes_branch[1]
         else:
             # Fully connected network
-            self.branch = FNN(
-                layer_sizes_branch,
-                activation_branch,
-                kernel_initializer,
-                regularization=regularization,
-            )
-        self.trunk = FNN(
-            layer_sizes_trunk,
-            self.activation_trunk,
-            kernel_initializer,
-            regularization=regularization,
-        )
-        self.b = tf.Variable(tf.zeros(1))
+            self.branch = FNN(layer_sizes_branch, activation_branch, kernel_initializer)
+        self.trunk = FNN(layer_sizes_trunk, self.activation_trunk, kernel_initializer)
+        self.b = torch.tensor(0.0, requires_grad=True)
+        self.regularizer = regularization
 
-    def call(self, inputs, training=False):
+    def forward(self, inputs):
         x_func = inputs[0]
         x_loc = inputs[1]
-
         # Branch net to encode the input function
         x_func = self.branch(x_func)
         # Trunk net to encode the domain of the output function
@@ -69,7 +59,7 @@ class DeepONetCartesianProd(NN):
             raise AssertionError(
                 "Output sizes of branch net and trunk net do not match."
             )
-        x = tf.einsum("bi,ni->bn", x_func, x_loc)
+        x = torch.einsum("bi,ni->bn", x_func, x_loc)
         # Add bias
         x += self.b
 
@@ -112,50 +102,39 @@ class PODDeepONet(NN):
         regularization=None,
     ):
         super().__init__()
-        self.pod_basis = tf.convert_to_tensor(pod_basis, dtype=tf.float32)
         if isinstance(activation, dict):
             activation_branch = activation["branch"]
             self.activation_trunk = activations.get(activation["trunk"])
         else:
             activation_branch = self.activation_trunk = activations.get(activation)
 
+        self.pod_basis = torch.as_tensor(pod_basis, dtype=torch.float32)
         if callable(layer_sizes_branch[1]):
             # User-defined network
             self.branch = layer_sizes_branch[1]
         else:
             # Fully connected network
-            self.branch = FNN(
-                layer_sizes_branch,
-                activation_branch,
-                kernel_initializer,
-                regularization=regularization,
-            )
-
+            self.branch = FNN(layer_sizes_branch, activation_branch, kernel_initializer)
         self.trunk = None
         if layer_sizes_trunk is not None:
             self.trunk = FNN(
-                layer_sizes_trunk,
-                self.activation_trunk,
-                kernel_initializer,
-                regularization=regularization,
+                layer_sizes_trunk, self.activation_trunk, kernel_initializer
             )
-            self.b = tf.Variable(tf.zeros(1))
+            self.b = torch.tensor(0.0, requires_grad=True)
+        self.regularizer = regularization
 
-    def call(self, inputs, training=False):
+    def forward(self, inputs):
         x_func = inputs[0]
         x_loc = inputs[1]
 
-        # Branch net to encode the input function
         x_func = self.branch(x_func)
-        # Trunk net to encode the domain of the output function
         if self.trunk is None:
             # POD only
-            x = tf.einsum("bi,ni->bn", x_func, self.pod_basis)
+            x = torch.einsum("bi,ni->bn", x_func, self.pod_basis)
         else:
             x_loc = self.activation_trunk(self.trunk(x_loc))
-            x = tf.einsum("bi,ni->bn", x_func, tf.concat((self.pod_basis, x_loc), 1))
+            x = torch.einsum("bi,ni->bn", x_func, torch.cat((self.pod_basis, x_loc), 1))
             x += self.b
-
         if self._output_transform is not None:
             x = self._output_transform(inputs, x)
         return x

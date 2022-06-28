@@ -52,6 +52,16 @@ def ndim(input_tensor):
     return input_tensor.dim()
 
 
+def transpose(tensor, axes=None):
+    if axes is None:
+        axes = tuple(range(tensor.dim())[::-1])
+    return torch.permute(tensor, axes)
+
+
+def reshape(tensor, shape):
+    return torch.reshape(tensor, shape)
+
+
 def Variable(initial_value, dtype=None):
     return torch.tensor(initial_value, dtype=dtype, requires_grad=True)
 
@@ -122,6 +132,10 @@ def sum(input_tensor, dim, keepdims=False):
 
 def reduce_sum(input_tensor):
     return torch.sum(input_tensor)
+
+
+def norm(tensor, ord=None, axis=None, keepdims=False):
+    return torch.linalg.norm(tensor, ord=ord, dim=axis, keepdim=keepdims)
 
 
 def zeros(shape, dtype):
