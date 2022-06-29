@@ -229,6 +229,8 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
                         )
                         +
                         kinematic_viscosity * laplace__u_prev
+                        +
+                        0.1 * torch.sin(2 * np.pi * (X + Y))
                 )
         )
         v_tent = (
@@ -243,6 +245,8 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
                         )
                         +
                         kinematic_viscosity * laplace__v_prev
+                        +
+                        0.1 * torch.sin(2 * np.pi * (X + Y))
                 )
         )
 
@@ -251,7 +255,7 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
         u_tent[0, :] = 0.0
         u_tent[:, 0] = 0.0
         u_tent[:, -1] = 0.0
-        u_tent[-1, :] = HORIZONTAL_VELOCITY_TOP
+        u_tent[-1, :] = 0.0
         v_tent[0, :] = 0.0
         v_tent[:, 0] = 0.0
         v_tent[:, -1] = 0.0
@@ -291,9 +295,9 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
             # Pressure Boundary Conditions: Homogeneous Neumann Boundary
             # Conditions everywhere except for the top, where it is a
             # homogeneous Dirichlet BC
-            p_next[:, -1] = p_next[:, -2]
-            p_next[0, :] = p_next[1, :]
-            p_next[:, 0] = p_next[:, 1]
+            p_next[:, -1] = 0.0
+            p_next[0, :] = 0.0
+            p_next[:, 0] = 0.0
             p_next[-1, :] = 0.0
 
             p_prev = p_next
@@ -322,7 +326,7 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
         u_next[0, :] = 0.0
         u_next[:, 0] = 0.0
         u_next[:, -1] = 0.0
-        u_next[-1, :] = HORIZONTAL_VELOCITY_TOP
+        u_next[-1, :] = 0.0
         v_next[0, :] = 0.0
         v_next[:, 0] = 0.0
         v_next[:, -1] = 0.0

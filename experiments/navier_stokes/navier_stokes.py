@@ -53,13 +53,13 @@ def pde_re(re, x, u):
             u_vel_t
             + (u_vel * u_vel_x + v_vel * u_vel_y)
             + p_x
-            - 1 / re * (u_vel_xx + u_vel_yy)
+            - 1 / re * (u_vel_xx + u_vel_yy) - 0.1 * tf.sin(2 * np.pi * (x[:, 0:1] + x[:, 1:2]))
     )
     momentum_y = (
             v_vel_t
             + (u_vel * v_vel_x + v_vel * v_vel_y)
             + p_y
-            - 1 / re * (v_vel_xx + v_vel_yy)
+            - 1 / re * (v_vel_xx + v_vel_yy) - 0.1 * tf.sin(2 * np.pi * (x[:, 0:1] + x[:, 1:2]))
     )
     continuity = u_vel_x + v_vel_y
 
@@ -67,7 +67,7 @@ def pde_re(re, x, u):
 
 
 def u_func(x):
-    return np.where(x[:, 1:2] == 1.0, 1.0, 0.0)
+    return np.zeros_like(x[:, 0:1])
 
 
 def v_func(x):
@@ -138,7 +138,6 @@ def test_nn(times=None, test_models=None):
         u_exact = exact_data[time]["u"].reshape(-1)
         v_exact = exact_data[time]["v"].reshape(-1)
         p_exact = exact_data[time]["p"].reshape(-1)
-        p_exact -= np.mean(p_exact)
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
