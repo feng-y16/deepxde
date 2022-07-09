@@ -136,11 +136,11 @@ from tqdm import tqdm
 DOMAIN_SIZE = 1.0
 DENSITY = 1.0
 HORIZONTAL_VELOCITY_TOP = 1.0
-N_PRESSURE_POISSON_ITERATIONS = 50
+N_PRESSURE_POISSON_ITERATIONS = 100
 STABILITY_SAFETY_FACTOR = 0.5
 
 
-def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_steps=10000,
+def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=1000,
           device=torch.device("cuda")):
     time_step_length = time_length / n_iterations
     if time_length == 0:
@@ -230,7 +230,7 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
                         +
                         kinematic_viscosity * laplace__u_prev
                         +
-                        0.1 * torch.sin(2 * np.pi * (X + Y))
+                        0.1 * torch.sin(np.pi * (X + Y))
                 )
         )
         v_tent = (
@@ -246,7 +246,7 @@ def solve(n_points=512, n_iterations=200000, time_length=1, re=1000, record_step
                         +
                         kinematic_viscosity * laplace__v_prev
                         +
-                        0.1 * torch.sin(2 * np.pi * (X + Y))
+                        0.1 * torch.sin(np.pi * (X + Y))
                 )
         )
 
