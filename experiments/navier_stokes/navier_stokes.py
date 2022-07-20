@@ -16,7 +16,7 @@ from solver import solve
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=50000)
+    parser.add_argument("-ep", "--epochs", type=int, default=20000)
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
     parser.add_argument("-rest", "--resample-times", type=int, default=4)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
@@ -53,13 +53,13 @@ def pde_re(re, x, u):
             u_vel_t
             + (u_vel * u_vel_x + v_vel * u_vel_y)
             + p_x
-            - 1 / re * (u_vel_xx + u_vel_yy) - 0.1 * tf.sin(np.pi * (x[:, 0:1] + x[:, 1:2]))
+            - 1 / re * (u_vel_xx + u_vel_yy)  # - 0.1 * tf.sin(2 * np.pi * (x[:, 0:1] + x[:, 1:2]))
     )
     momentum_y = (
             v_vel_t
             + (u_vel * v_vel_x + v_vel * v_vel_y)
             + p_y
-            - 1 / re * (v_vel_xx + v_vel_yy) - 0.1 * tf.sin(np.pi * (x[:, 0:1] + x[:, 1:2]))
+            - 1 / re * (v_vel_xx + v_vel_yy)  # - 0.1 * tf.sin(2 * np.pi * (x[:, 0:1] + x[:, 1:2]))
     )
     continuity = u_vel_x + v_vel_y
 
@@ -67,8 +67,8 @@ def pde_re(re, x, u):
 
 
 def u_func(x):
-    # return np.where(x[:, 1:2] == 1, 1, 0)
-    return np.zeros_like(x[:, 0:1])
+    return np.where(x[:, 1:2] == 1, 1, 0)
+    # return np.zeros_like(x[:, 0:1])
 
 
 def v_func(x):
@@ -103,7 +103,7 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, resampled_points=None):
+def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
     ax = plt.subplot(grid)
     ax.contour(data_x, data_y, data_z, colors="k", linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
     ax.contourf(data_x, data_y, data_z, cmap="rainbow", levels=levels, vmin=v_min, vmax=v_max)
@@ -115,8 +115,6 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, re
     m.set_clim(v_min, v_max)
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
-    if resampled_points is not None:
-        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker=',', s=1, color='y')
 
 
 def test_nn(times=None, test_models=None):
@@ -129,7 +127,7 @@ def test_nn(times=None, test_models=None):
         test_models_pred_exact[legend] = [None, None, None, None, None, None]
     exact_data_path = os.path.join(save_dir, "re_{:}.pkl".format(Re))
     if not os.path.isfile(exact_data_path):
-        exact_data = solve(n_points=num_test_samples, n_iterations=50000, re=Re)
+        exact_data = solve(n_points=num_test_samples, n_iterations=10000, re=Re)
         with open(exact_data_path, "wb") as f_solver:
             pickle.dump(exact_data, f_solver)
     else:
@@ -189,17 +187,12 @@ def test_nn(times=None, test_models=None):
             error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
             error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
             print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
-            resampled_points = test_model.resampled_data
-            if resampled_points is not None:
-                resampled_points = np.concatenate(resampled_points, axis=0)
-                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.05)[0]
-                resampled_points = resampled_points[selected_index][:, : 2]
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u-" + legend[:4], u_min, u_max, 20, resampled_points=resampled_points)
+                    "u-" + legend[:4], u_min, u_max, 20)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v-" + legend[:4], v_min, v_max, 20, resampled_points=resampled_points)
+                    "v-" + legend[:4], v_min, v_max, 20)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p-" + legend[:4], p_min, p_max, 20, resampled_points=resampled_points)
+                    "p-" + legend[:4], p_min, p_max, 20)
             result_count += 1
         contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
         contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
@@ -261,8 +254,8 @@ boundary_condition_u = dde.icbc.DirichletBC(spatio_temporal_domain,
                                             u_func, lambda _, on_boundary: on_boundary, component=0)
 boundary_condition_v = dde.icbc.DirichletBC(spatio_temporal_domain,
                                             v_func, lambda _, on_boundary: on_boundary, component=1)
-boundary_condition_p = dde.icbc.DirichletBC(spatio_temporal_domain,
-                                            p_func, lambda _, on_boundary: on_boundary, component=2)
+boundary_condition_p = dde.icbc.NeumannBC(spatio_temporal_domain,
+                                          p_func, lambda _, on_boundary: on_boundary, component=2)
 
 initial_condition_u = dde.icbc.IC(spatio_temporal_domain,
                                   u_func, lambda _, on_initial: on_initial, component=0)
@@ -275,14 +268,14 @@ if resample:
     data = dde.data.TimePDE(spatio_temporal_domain, pde, [boundary_condition_u, boundary_condition_v,
                                                           boundary_condition_p, initial_condition_u,
                                                           initial_condition_v, initial_condition_p],
-                            num_domain=num_train_samples_domain, num_boundary=2000, num_initial=2000,
-                            num_test=100000)
+                            num_domain=num_train_samples_domain, num_boundary=5000, num_initial=5000,
+                            num_test=10000)
 else:
     data = dde.data.TimePDE(spatio_temporal_domain, pde, [boundary_condition_u, boundary_condition_v,
                                                           boundary_condition_p, initial_condition_u,
                                                           initial_condition_v, initial_condition_p],
-                            num_domain=num_train_samples_domain + resample_times * resample_num, num_boundary=2000,
-                            num_initial=2000, num_test=100000)
+                            num_domain=num_train_samples_domain + resample_times * resample_num, num_boundary=5000,
+                            num_initial=5000, num_test=10000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"

@@ -15,7 +15,7 @@ import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=50000)
+    parser.add_argument("-ep", "--epochs", type=int, default=20000)
     parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
     parser.add_argument("-rest", "--resample-times", type=int, default=4)
     parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
@@ -209,10 +209,10 @@ geom = dde.geometry.Hypercube([0 for _ in range(d)], [2 * np.pi for _ in range(d
 bc = dde.icbc.DirichletBC(geom, func, lambda _, on_boundary: on_boundary)
 
 if resample:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=10000, num_test=100000)
+    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=200, num_test=100000)
 else:
     data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
-                        num_boundary=10000, num_test=100000)
+                        num_boundary=200, num_test=100000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"

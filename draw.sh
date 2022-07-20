@@ -13,21 +13,21 @@ fi
 if [ "$exp_name" == "navier_stokes" ]; then
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load PINN_10.0 LWIS_10.0 --re 10 --num-train-samples-domain 10000 --resample-numbers 10000 \
-  --num-test-samples 256 &> experiments/"$exp_name"/draw_10.0.txt &
+  --num-test-samples 100 &> experiments/"$exp_name"/draw_10.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load PINN_100.0 LWIS_100.0 --re 100 --num-train-samples-domain 10000 --resample-numbers 10000 \
-  --num-test-samples 256 &> experiments/"$exp_name"/draw_100.0.txt &
+  --num-test-samples 100 &> experiments/"$exp_name"/draw_100.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load PINN_1000.0 LWIS_1000.0 --re 1000 --num-train-samples-domain 10000 --resample-numbers 10000 \
-  --num-test-samples 256 &> experiments/"$exp_name"/draw_1000.0.txt &
+  --num-test-samples 100 &> experiments/"$exp_name"/draw_1000.0.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 elif [ "$exp_name" == "schrodinger" ]; then
   num_train_samples_domain=500
   resample_times=5
   resample_numbers=500
-  data_multipliers=(1 4 16)
+  data_multipliers=(1 2 4)
   sigmas=(0.05 0.1 0.2)
   draw_load=()
   for data_multiplier in "${data_multipliers[@]}"; do
@@ -42,6 +42,10 @@ elif [ "$exp_name" == "schrodinger" ]; then
   done
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+elif [ "$exp_name" == "burgers" ]; then
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --load PINN LWIS gPINN gLWIS &> experiments/"$exp_name"/draw.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \

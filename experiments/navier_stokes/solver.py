@@ -136,11 +136,11 @@ from tqdm import tqdm
 DOMAIN_SIZE = 1.0
 DENSITY = 1.0
 HORIZONTAL_VELOCITY_TOP = 1.0
-N_PRESSURE_POISSON_ITERATIONS = 100
+N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
 
-def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=1000,
+def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1000,
           device=torch.device("cuda")):
     time_step_length = time_length / n_iterations
     if time_length == 0:
@@ -229,8 +229,8 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
                         )
                         +
                         kinematic_viscosity * laplace__u_prev
-                        +
-                        0.1 * torch.sin(np.pi * (X + Y))
+                        # +
+                        # 0.1 * torch.sin(2 * np.pi * (X + Y))
                 )
         )
         v_tent = (
@@ -245,8 +245,8 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
                         )
                         +
                         kinematic_viscosity * laplace__v_prev
-                        +
-                        0.1 * torch.sin(np.pi * (X + Y))
+                        # +
+                        # 0.1 * torch.sin(2 * np.pi * (X + Y))
                 )
         )
 
@@ -255,7 +255,7 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
         u_tent[0, :] = 0.0
         u_tent[:, 0] = 0.0
         u_tent[:, -1] = 0.0
-        u_tent[-1, :] = 0.0
+        u_tent[-1, :] = HORIZONTAL_VELOCITY_TOP
         v_tent[0, :] = 0.0
         v_tent[:, 0] = 0.0
         v_tent[:, -1] = 0.0
@@ -272,6 +272,16 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
                         d_u_tent__d_x
                         +
                         d_v_tent__d_y
+                )
+                -
+                DENSITY
+                *
+                (
+                        d_u_tent__d_x ** 2
+                        +
+                        2 * d_u_tent__d_x * d_v_tent__d_y
+                        +
+                        d_v_tent__d_y ** 2
                 )
         )
 
@@ -295,10 +305,10 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
             # Pressure Boundary Conditions: Homogeneous Neumann Boundary
             # Conditions everywhere except for the top, where it is a
             # homogeneous Dirichlet BC
-            p_next[:, -1] = 0.0
-            p_next[0, :] = 0.0
-            p_next[:, 0] = 0.0
-            p_next[-1, :] = 0.0
+            p_next[:, -1] = p_next[:, -2]
+            p_next[0, :] = p_next[1, :]
+            p_next[:, 0] = p_next[:, 1]
+            p_next[-1, :] = p_next[-2, :]
 
             p_prev = p_next
 
@@ -326,7 +336,7 @@ def solve(n_points=256, n_iterations=50000, time_length=1, re=100, record_steps=
         u_next[0, :] = 0.0
         u_next[:, 0] = 0.0
         u_next[:, -1] = 0.0
-        u_next[-1, :] = 0.0
+        u_next[-1, :] = HORIZONTAL_VELOCITY_TOP
         v_next[0, :] = 0.0
         v_next[:, 0] = 0.0
         v_next[:, -1] = 0.0
