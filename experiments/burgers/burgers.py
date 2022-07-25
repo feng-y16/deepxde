@@ -15,12 +15,16 @@ import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=100)
-    parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=100)
-    parser.add_argument("-r", "--resample", action="store_true", default=False)
-    parser.add_argument("-l", "--load", nargs='+', default=[])
+    parser.add_argument("--epochs", type=int, default=20000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=2000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=200)
+    parser.add_argument("--num-train-samples-initial", type=int, default=200)
+    parser.add_argument("--resample-ratio", type=float, default=0.4)
+    parser.add_argument("--resample-times", type=int, default=4)
+    parser.add_argument("--resample-splits", type=int, default=2)
+    parser.add_argument("--resample", action="store_true", default=False)
+    parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
 
@@ -116,36 +120,48 @@ tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
 print(args)
 resample = args.resample
+adversarial = args.adversarial
 resample_times = args.resample_times
-resample_num = args.resample_numbers
+resample_ratio = args.resample_ratio
+resample_splits = args.resample_splits
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
+num_train_samples_boundary = args.num_train_samples_boundary
+num_train_samples_initial = args.num_train_samples_initial
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
     prefix = "LWIS"
+elif adversarial:
+    prefix = "AT"
 else:
     prefix = "PINN"
 print("resample:", resample)
-print("total data points:", num_train_samples_domain + resample_times * resample_num)
+print("adversarial:", adversarial)
+print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 geom = dde.geometry.Interval(-1, 1)
 timedomain = dde.geometry.TimeDomain(0, 1.0)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
-bc = dde.icbc.DirichletBC(geomtime, lambda x: 0, lambda _, on_boundary: on_boundary)
+bc = dde.icbc.DirichletBC(geomtime, lambda x: np.zeros_like(x[:, 0:1]), lambda _, on_boundary: on_boundary)
 ic = dde.icbc.IC(
     geomtime, lambda x: -np.sin(np.pi * x[:, 0:1]), lambda _, on_initial: on_initial
 )
 
-if resample:
+if resample or adversarial:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain, num_boundary=80, num_initial=160
+        geomtime, pde, [bc, ic],
+        num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
+        num_boundary=int(num_train_samples_boundary - num_train_samples_boundary * resample_ratio),
+        num_initial=int(num_train_samples_initial - num_train_samples_initial * resample_ratio)
     )
 else:
     data = dde.data.TimePDE(
-        geomtime, pde, [bc, ic], num_domain=num_train_samples_domain + resample_times * resample_num,
-        num_boundary=80, num_initial=160
+        geomtime, pde, [bc, ic],
+        num_domain=num_train_samples_domain,
+        num_boundary=num_train_samples_boundary,
+        num_initial=num_train_samples_initial
     )
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
@@ -158,15 +174,26 @@ if len(load) == 0:
     model = dde.Model(data, net)
 
     model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+    callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=0.1)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
-    else:
-        resampler = None
-        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
-    resampled_data = resampler.sampled_train_points if resampler is not None else None
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
+            sample_num_initial=int(num_train_samples_initial * resample_ratio),
+            sample_times=resample_times, sigma=0.1,
+            sample_splits=resample_splits)
+        callbacks.append(resampler)
+    elif adversarial:
+        resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
+            sample_num_initial=int(num_train_samples_initial * resample_ratio),
+            sample_times=resample_times, eta=0.01)
+        callbacks.append(resampler)
+    loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}

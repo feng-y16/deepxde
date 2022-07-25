@@ -517,139 +517,268 @@ class PDEResidualResampler(Callback):
             )
 
 
-class PDEGradientAccumulativeResampler(Callback):
+class PDEAdversarialAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, period=100, sample_num=100, sample_count=10, sigma=1, boundary=False,
-                 sample_times=5, top_k=1000):
+    def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
+                 sample_num_initial=0, eta=0.01, k=10):
         super().__init__()
-        self.period = period
-        self.sample_num = sample_num
-        self.sample_count = sample_count
-        self.sigma = sigma
-        self.current_sample_count = 0
-        self.num_bcs_initial = None
-        self.epochs_since_last_resample = 0
-        self.boundary = boundary
+        self.sample_every = sample_every
         self.sample_times = sample_times
-        self.top_k = top_k
+        self.sample_num_domain = sample_num_domain // sample_times
+        self.sample_num_boundary = sample_num_boundary // sample_times
+        self.sample_num_initial = sample_num_initial // sample_times
+        self.eta = eta
+        self.k = k
+        self.current_sample_times = 0
+        self.epochs_since_last_sample = 0
         self.sampled_train_points = []
+        self.num_bcs_initial = None
 
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
 
-    def get_weight(self, x, operator, metric='loss'):
-        op = None
+    def projected_gradient_ascent_domain(self, x, operator, geom):
+        if utils.get_num_args(operator) == 2:
+
+            @tf.function
+            def op(inputs, inputs_min, inputs_max):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                inputs += self.eta * jacobian(loss, inputs, i=0)
+                inputs = tf.where(inputs > inputs_max, inputs_max, inputs)
+                inputs = tf.where(inputs < inputs_min, inputs_min, inputs)
+                return inputs
+        else:
+            assert utils.get_num_args(operator) == 3
+            aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
+
+            @tf.function
+            def op(inputs, inputs_min, inputs_max):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y, aux_vars)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                inputs += self.eta * tf.sign(jacobian(loss, inputs, i=0))
+                inputs = tf.where(inputs > inputs_max, inputs_max, inputs)
+                inputs = tf.where(inputs < inputs_min, inputs_min, inputs)
+                return inputs
+        if hasattr(geom, "timedomain"):
+            x_min = geom.geometry.xmin if hasattr(geom.geometry, "xmin") else np.array([geom.geometry.l])
+            x_max = geom.geometry.xmax if hasattr(geom.geometry, "xmax") else np.array([geom.geometry.r])
+            x_min = np.concatenate((x_min, np.array([geom.timedomain.t0])), axis=0)
+            x_max = np.concatenate((x_max, np.array([geom.timedomain.t1])), axis=0)
+        else:
+            x_min = geom.xmin if hasattr(geom, "xmin") else np.array([geom.l])
+            x_max = geom.xmax if hasattr(geom, "xmax") else np.array([geom.r])
+        x_min = x_min.reshape(1, -1).repeat(x.shape[0], axis=0).astype(config.real(np))
+        x_max = x_max.reshape(1, -1).repeat(x.shape[0], axis=0).astype(config.real(np))
+        for _ in range(self.k):
+            x = op(x, x_min, x_max)
+        return utils.to_numpy(x)
+
+    def projected_gradient_ascent_boundary(self, x, bcs, geom):
+
+        @tf.function
+        def op(inputs, inputs_min, inputs_max, boundary_gts, update_mask):
+            y = self.model.net(inputs)
+            loss = tf.reduce_sum((y - boundary_gts) ** 2, axis=1, keepdims=True)
+            inputs += self.eta * update_mask * tf.sign(jacobian(loss, inputs, i=0))
+            inputs = tf.where(inputs > inputs_max, inputs_max, inputs)
+            inputs = tf.where(inputs < inputs_min, inputs_min, inputs)
+            return inputs
+
+        if hasattr(geom, "timedomain"):
+            x_min = geom.geometry.xmin if hasattr(geom.geometry, "xmin") else np.array([geom.geometry.l])
+            x_max = geom.geometry.xmax if hasattr(geom.geometry, "xmax") else np.array([geom.geometry.r])
+            x_min = np.concatenate((x_min, np.array([geom.timedomain.t0])), axis=0)
+            x_max = np.concatenate((x_max, np.array([geom.timedomain.t1])), axis=0)
+        else:
+            x_min = geom.xmin if hasattr(geom, "xmin") else np.array([geom.l])
+            x_max = geom.xmax if hasattr(geom, "xmax") else np.array([geom.r])
+        x_min = x_min.reshape(1, -1).repeat(x.shape[0], axis=0).astype(config.real(np))
+        x_max = x_max.reshape(1, -1).repeat(x.shape[0], axis=0).astype(config.real(np))
+        update_mask = np.logical_or(np.isclose(x, x_min), np.isclose(x, x_max)).astype(config.real(np))
+        boundary_gts = []
+        for bc in bcs:
+            if hasattr(bc, "original_func"):
+                boundary_gts.append(bc.original_func(x).astype(dtype=config.real(np)))
+        boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
+        for _ in range(self.k):
+            x = op(x, x_min, x_max, boundary_gts, update_mask)
+        return utils.to_numpy(x)
+
+    def on_epoch_end(self):
+        self.epochs_since_last_sample += 1
+        if self.epochs_since_last_sample < self.sample_every or self.current_sample_times == self.sample_times:
+            return
+        self.current_sample_times += 1
+        self.epochs_since_last_sample = 0
+        sampled_points_domain, sampled_points_boundary, sampled_points_initial = None, None, None
+        if self.sample_num_domain > 0:
+            random_points_domain = self.model.data.geom.random_points(self.sample_num_domain, random="pseudo")
+            sampled_points_domain = self.projected_gradient_ascent_domain(random_points_domain,
+                                                                          self.model.data.pde,
+                                                                          self.model.data.geom)
+            self.model.data.add_train_points(None, None, boundary=False, train_x=sampled_points_domain)
+        if self.sample_num_boundary > 0:
+            random_points_boundary = self.model.data.geom.random_boundary_points(self.sample_num_boundary,
+                                                                                 random="pseudo")
+            sampled_points_boundary = self.projected_gradient_ascent_boundary(random_points_boundary,
+                                                                              self.model.data.bcs,
+                                                                              self.model.data.geom)
+            self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
+        if self.sample_num_initial > 0:
+            random_points_initial = self.model.data.geom.random_initial_points(self.sample_num_initial,
+                                                                               random="pseudo")
+            sampled_points_initial = self.projected_gradient_ascent_boundary(random_points_initial,
+                                                                             self.model.data.bcs,
+                                                                             self.model.data.geom)
+            self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
+        sampled_train_points = sampled_points_domain
+        if self.sample_num_boundary > 0:
+            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
+        if self.sample_num_initial > 0:
+            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
+        self.sampled_train_points.append(sampled_train_points)
+        self.print_info()
+
+    def print_info(self):
+        print(self.model.data.num_domain, end=" ")
+        if hasattr(self.model.data, "num_boundary"):
+            print(self.model.data.num_boundary, end=" ")
+        if hasattr(self.model.data, "num_initial"):
+            print(self.model.data.num_initial, end=" ")
+        print("")
+
+
+class PDEGradientAccumulativeResampler(Callback):
+    """Resample the training points for PDE losses every given period."""
+
+    def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
+                 sample_num_initial=0, sigma=1, top_k=100, sample_splits=2):
+        super().__init__()
+        self.sample_every = sample_every
+        self.sample_times = sample_times
+        self.sample_num = sample_num_domain
+        self.sample_num_domain = sample_num_domain // sample_times
+        self.sample_num_boundary = sample_num_boundary // sample_times
+        self.sample_num_initial = sample_num_initial // sample_times
+        self.sigma = sigma
+        self.top_k = top_k
+        self.sample_splits = sample_splits
+        self.current_sample_times = 0
+        self.epochs_since_last_sample = 0
+        self.sampled_train_points = []
+        self.num_bcs_initial = None
+        self.boundary = False
+
+    def on_train_begin(self):
+        self.num_bcs_initial = self.model.data.num_bcs
+
+    def get_weights_domain(self, x, operator, loss_weight=0.5, gradient_weight=0.5):
         if isinstance(x, tuple):
             x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
         else:
             x = np.asarray(x, dtype=config.real(np))
 
-        if metric == "loss":
-            if utils.get_num_args(operator) == 2:
+        if utils.get_num_args(operator) == 2:
 
-                @tf.function
-                def op(inputs):
-                    y = self.model.net(inputs)
-                    outs = operator(inputs, y)
-                    loss = None
-                    if type(outs) == list:
-                        for out in outs:
-                            if loss is None:
-                                loss = out ** 2
-                            else:
-                                loss += out ** 2
-                    else:
-                        loss = outs ** 2
-                    return tf.reduce_sum(loss, axis=1)
-
-            elif utils.get_num_args(operator) == 3:
-                aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
-
-                @tf.function
-                def op(inputs):
-                    y = self.model.net(inputs)
-                    outs = operator(inputs, y, aux_vars)
-                    loss = None
-                    if type(outs) == list:
-                        for out in outs:
-                            if loss is None:
-                                loss = out ** 2
-                            else:
-                                loss += out ** 2
-                    else:
-                        loss = outs ** 2
-                    return tf.reduce_sum(loss, axis=1)
-
+            @tf.function
+            def op(inputs):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                return loss_weight * tf.reduce_sum(loss, axis=1) + \
+                       gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         else:
-            assert metric == "gradient"
-            if utils.get_num_args(operator) == 2:
+            assert utils.get_num_args(operator) == 3
+            aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
 
-                @tf.function
-                def op(inputs):
-                    y = self.model.net(inputs)
-                    outs = operator(inputs, y)
-                    loss = None
-                    if type(outs) == list:
-                        for out in outs:
-                            if loss is None:
-                                loss = out ** 2
-                            else:
-                                loss += out ** 2
-                    else:
-                        loss = outs ** 2
-                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1) + tf.reduce_sum(loss, axis=1)
-
-            elif utils.get_num_args(operator) == 3:
-                aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
-
-                @tf.function
-                def op(inputs):
-                    y = self.model.net(inputs)
-                    outs = operator(inputs, y, aux_vars)
-                    loss = None
-                    if type(outs) == list:
-                        for out in outs:
-                            if loss is None:
-                                loss = out ** 2
-                            else:
-                                loss += out ** 2
-                    else:
-                        loss = outs ** 2
-                    return tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1) + tf.reduce_sum(loss, axis=1)
-
+            @tf.function
+            def op(inputs):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y, aux_vars)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                return loss_weight * tf.reduce_sum(loss, axis=1) + \
+                       gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         return utils.to_numpy(op(x))
 
+    def get_weights_boundary(self, x, bcs, loss_weight=0.5, gradient_weight=0.5):
+
+        @tf.function
+        def op(inputs, boundary_gts):
+            y = self.model.net(inputs)
+            loss = tf.reduce_sum((y - boundary_gts) ** 2, axis=1, keepdims=True)
+            return loss_weight * tf.reduce_sum(loss, axis=1) + \
+                   gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+        boundary_gts = []
+        for bc in bcs:
+            if hasattr(bc, "original_func"):
+                boundary_gts.append(bc.original_func(x))
+        boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
+        return utils.to_numpy(op(x, boundary_gts))
+
     def on_epoch_end(self):
-        self.epochs_since_last_resample += 1
-        if self.epochs_since_last_resample < self.period or self.current_sample_count == self.sample_count:
+        self.epochs_since_last_sample += 1
+        if self.epochs_since_last_sample < self.sample_every or self.current_sample_times == self.sample_times:
             return
-        self.current_sample_count += 1
-        self.epochs_since_last_resample = 0
-        sampled_train_points = None
-        if self.boundary:
-            random_points = self.model.data.geom.random_boundary_points(self.sample_num // 2 + self.sample_num % 2,
-                                                                        random="pseudo")
+        self.current_sample_times += 1
+        self.epochs_since_last_sample = 0
+        sampled_points_domain = self.model.data.geom.random_points(
+            self.sample_num_domain // 2 + self.sample_num_domain % 2 +
+            (self.sample_num_domain // 2) % self.sample_splits, random="pseudo")
+        if self.sample_num_boundary > 0:
+            sampled_points_boundary = self.model.data.geom.random_boundary_points(
+                self.sample_num_boundary // 2 + self.sample_num_boundary % 2 +
+                (self.sample_num_boundary // 2) % self.sample_splits, random="pseudo")
         else:
-            random_points = self.model.data.geom.random_points(self.sample_num // 2 + self.sample_num % 2,
-                                                               random="pseudo")
-        for i in range(self.sample_times + 1):
-            target_num_samples = (self.sample_num // 2) // self.sample_times \
-                if i < self.sample_times else (self.sample_num // 2) % self.sample_times
-            if target_num_samples == 0:
-                continue
-            if self.boundary:
-                x = self.model.data.bcs[0].collocation_points(self.model.data.train_x_all)
-                x = np.concatenate((x, random_points), axis=0)
-            else:
-                x = self.model.data.train_x
-                x = np.concatenate((x, random_points), axis=0)
-            weight = jnp.array(self.get_weight(x, self.model.data.pde, "gradient"))
+            sampled_points_boundary = None
+        if self.sample_num_initial > 0:
+            sampled_points_initial = self.model.data.geom.random_initial_points(
+                self.sample_num_initial // 2 + self.sample_num_initial % 2 +
+                (self.sample_num_initial // 2) % self.sample_splits, random="pseudo")
+        else:
+            sampled_points_initial = None
+        for i in range(self.sample_splits):
+            domain_points_all = np.concatenate((self.model.data.train_x, sampled_points_domain), axis=0)
+            weight = jnp.array(self.get_weights_domain(domain_points_all, self.model.data.pde))
             target_indexes = jnp.argsort(-weight)[: self.top_k]
             weight = weight[target_indexes]
             weight /= jnp.sum(weight)
-            x = jnp.expand_dims(x[target_indexes, :], axis=0)
-
+            x = jnp.expand_dims(domain_points_all[target_indexes, :], axis=0)
             weight = jnp.expand_dims(weight, axis=0)
             dim = x.shape[-1]
 
@@ -658,16 +787,57 @@ class PDEGradientAccumulativeResampler(Callback):
                 prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) ** dim / self.sigma ** dim *
                                jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)), axis=1)
                 return np.array(prob)
-            if sampled_train_points is None:
-                sampled_train_points = self.model.data.add_train_points(sample_prob,
-                                                                        target_num_samples,
-                                                                        boundary=self.boundary)
-            else:
-                sampled_train_points = \
-                    np.concatenate((sampled_train_points,
-                                    self.model.data.add_train_points(sample_prob,
-                                                                     target_num_samples,
-                                                                     boundary=self.boundary)),
-                                   axis=0)
-        self.model.data.add_train_points(None, None, boundary=self.boundary, train_x=random_points)
+
+            temp = self.model.data.sample_train_points(
+                sample_prob, self.sample_num_domain // (2 * self.sample_splits),
+                sampler=self.model.data.geom.random_points)
+            sampled_points_domain = np.concatenate((sampled_points_domain, temp))
+
+            boundary_points_all = self.model.data.train_x_bc
+            if self.sample_num_boundary > 0:
+                boundary_points_all = np.concatenate((boundary_points_all, sampled_points_boundary), axis=0)
+            if self.sample_num_initial > 0:
+                boundary_points_all = np.concatenate((boundary_points_all, sampled_points_initial), axis=0)
+            weight = jnp.array(self.get_weights_boundary(boundary_points_all, self.model.data.bcs))
+            target_indexes = jnp.argsort(-weight)[: self.top_k]
+            weight = weight[target_indexes]
+            weight /= jnp.sum(weight)
+            x = jnp.expand_dims(boundary_points_all[target_indexes, :], axis=0)
+            weight = jnp.expand_dims(weight, axis=0)
+            dim = x.shape[-1]
+
+            def sample_prob(sample):
+                dist = jnp.linalg.norm(jnp.expand_dims(sample, axis=1) - x, ord=2, axis=2)
+                prob = jnp.sum(weight * 1 / jnp.sqrt(2 * np.pi) ** dim / self.sigma ** dim *
+                               jnp.exp(-dist ** 2 / (2 * self.sigma ** 2)), axis=1)
+                return np.array(prob)
+            if self.sample_num_boundary > 0:
+                temp = self.model.data.sample_train_points(
+                    sample_prob, self.sample_num_boundary // (2 * self.sample_splits),
+                    sampler=self.model.data.geom.random_boundary_points)
+                sampled_points_boundary = np.concatenate((sampled_points_boundary, temp))
+            if self.sample_num_initial > 0:
+                temp = self.model.data.sample_train_points(
+                    sample_prob, self.sample_num_initial // (2 * self.sample_splits),
+                    sampler=self.model.data.geom.random_initial_points)
+                sampled_points_initial = np.concatenate((sampled_points_initial, temp))
+        self.model.data.add_train_points(None, None, boundary=False, train_x=sampled_points_domain)
+        if self.sample_num_boundary > 0:
+            self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
+        if self.sample_num_initial > 0:
+            self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
+        sampled_train_points = sampled_points_domain
+        if self.sample_num_boundary > 0:
+            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
+        if self.sample_num_initial > 0:
+            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
         self.sampled_train_points.append(sampled_train_points)
+        self.print_info()
+
+    def print_info(self):
+        print(self.model.data.num_domain, end=" ")
+        if hasattr(self.model.data, "num_boundary"):
+            print(self.model.data.num_boundary, end=" ")
+        if hasattr(self.model.data, "num_initial"):
+            print(self.model.data.num_initial, end=" ")
+        print("")

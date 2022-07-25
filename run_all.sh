@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
+trap 'trap - SIGTERM && kill -- -$$' SIGINT SIGTERM
 ./run.sh burgers &
-sleep 10
-./run.sh convection &
 sleep 10
 ./run.sh navier_stokes &
 sleep 10

@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+trap 'trap - SIGTERM && kill -- -$$' SIGINT SIGTERM
 exp_name=$1
 GPUs=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits | \
 sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "\n")
@@ -43,12 +44,8 @@ elif [ "$exp_name" == "schrodinger" ]; then
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
-elif [ "$exp_name" == "burgers" ]; then
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN LWIS gPINN gLWIS &> experiments/"$exp_name"/draw.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN LWIS &> experiments/"$exp_name"/draw.txt &
+  --load PINN AT LWIS &> experiments/"$exp_name"/draw.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi

@@ -198,10 +198,10 @@ class PDE(Data):
         self.train_x, self.train_y, self.train_aux_vars = None, None, None
         self.train_next_batch()
 
-    def sample_train_points(self, sample_prob, sample_num, boundary=False):
+    def sample_train_points(self, sample_prob, sample_num, sampler=None):
         X = np.empty((0, self.geom.dim), dtype=config.real(np))
-        if boundary:
-            tmp = self.geom.random_boundary_points(10000, random="pseudo")
+        if sampler:
+            tmp = sampler(10000, random="pseudo")
         else:
             tmp = self.geom.random_points(10000, random="pseudo")
         probs = sample_prob(tmp)
@@ -209,8 +209,8 @@ class PDE(Data):
         if sample_num > 0:
             sample_count = 0
             while sample_count < sample_num:
-                if boundary:
-                    tmp = self.geom.random_boundary_points(1000, random="pseudo")
+                if sampler:
+                    tmp = sampler(1000, random="pseudo")
                 else:
                     tmp = self.geom.random_points(1000, random="pseudo")
                 probs = sample_prob(tmp)
@@ -227,12 +227,15 @@ class PDE(Data):
             X = np.array(list(filter(is_not_excluded, X)))
         return X
 
-    def add_train_points(self, sample_prob, sample_num, boundary=False, train_x=None):
+    def add_train_points(self, sample_prob, sample_num, boundary=False, initial=False, train_x=None):
         if boundary:
             if train_x is None:
-                train_x = self.sample_train_points(sample_prob, sample_num, boundary)
+                train_x = self.sample_train_points(sample_prob, sample_num, self.geom.random_boundary_points)
             self.train_x_all = np.concatenate((self.train_x_all, train_x))
-            self.num_boundary += len(train_x)
+            if initial and hasattr(self, "num_initial"):
+                self.num_initial += len(train_x)
+            else:
+                self.num_boundary += len(train_x)
             x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
             self.num_bcs = list(map(len, x_bcs))
             self.train_x_bc = (
@@ -240,9 +243,10 @@ class PDE(Data):
                 if x_bcs
                 else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
             )
+            self.train_x = self.train_x_bc.copy()
             if self.pde is not None:
-                self.train_x = np.vstack((self.train_x, self.bcs[0].collocation_points(train_x)))
-                self.train_y = self.soln(self.train_x) if self.soln else None
+                self.train_x = np.vstack((self.train_x, self.train_x_all))
+            self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)

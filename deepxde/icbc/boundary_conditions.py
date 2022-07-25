@@ -66,6 +66,7 @@ class DirichletBC(BC):
 
     def __init__(self, geom, func, on_boundary, component=0):
         super().__init__(geom, on_boundary, component)
+        self.original_func = func
         self.func = npfunc_range_autocache(utils.return_tensor(func))
 
     def error(self, X, inputs, outputs, beg, end, aux_var=None):

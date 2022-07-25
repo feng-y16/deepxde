@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+trap 'trap - SIGTERM && kill -- -$$' SIGINT SIGTERM
 exp_name="schrodinger"
 GPUs=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits | \
 sort -nk 2 -r | awk '$2>3000 {print $1}' | tr -d "\n")
@@ -58,4 +59,13 @@ done
 CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
 --load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
 GPU_index=$(((GPU_index+1)%num_GPUs))
+set +e
+num_jobs=$(jobs | grep -c "")
+while [ "$num_jobs" -ge 1 ]
+do
+  num_jobs=$(jobs | grep -c "Run")
+  echo "drawing" "$exp_name"
+  sleep 2
+done
+set -e
 echo "bash complete"

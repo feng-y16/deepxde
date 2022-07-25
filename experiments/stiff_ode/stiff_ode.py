@@ -15,12 +15,16 @@ import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=5)
-    parser.add_argument("-rest", "--resample-times", type=int, default=2)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=5)
-    parser.add_argument("-r", "--resample", action="store_true", default=False)
-    parser.add_argument("-l", "--load", nargs='+', default=[])
+    parser.add_argument("--epochs", type=int, default=20000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=15)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=0)
+    parser.add_argument("--num-train-samples-initial", type=int, default=2)
+    parser.add_argument("--resample-ratio", type=float, default=0.4)
+    parser.add_argument("--resample-times", type=int, default=2)
+    parser.add_argument("--resample-splits", type=int, default=1)
+    parser.add_argument("--resample", action="store_true", default=False)
+    parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
 
@@ -70,16 +74,15 @@ def plot_loss_combined(losses):
 def test_nn(test_models=None):
     if test_models is None:
         test_models = {}
-    plt.figure(figsize=(12, 4))
-    gs = GridSpec(1, 2)
-    ax1 = plt.subplot(gs[0, 0])
-    ax2 = plt.subplot(gs[0, 1])
+    plt.figure(figsize=(len(test_models) * 5, 4))
+    gs = GridSpec(1, len(test_models))
     x = np.linspace(0, 1, 10000)
     y_exact = func(x.reshape(-1, 1))
-    ax1.plot(x, y_exact, label="exact", linewidth=3)
-    ax2.plot(x, y_exact, label="exact", linewidth=3)
     result_count = 0
+    plot_index = 0
     for legend, test_model in test_models.items():
+        ax = plt.subplot(gs[0, plot_index])
+        ax.plot(x, y_exact, label="exact", linewidth=3)
         y_pred = test_model.predict(x.reshape(-1, 1))
         pde_pred = test_model.predict(x.reshape(-1, 1), operator=ode_system)
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
@@ -90,25 +93,16 @@ def test_nn(test_models=None):
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
-        if result_count % 2 == 0:
-            ax1.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
-            resampled_points = test_model.resampled_data
-            if resampled_points is not None:
-                resampled_points = np.concatenate(resampled_points, axis=0)
-                ax1.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
-        else:
-            ax2.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
-            resampled_points = test_model.resampled_data
-            if resampled_points is not None:
-                resampled_points = np.concatenate(resampled_points, axis=0)
-                ax2.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
+        ax.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
+        resampled_points = test_model.resampled_data
+        if resampled_points is not None:
+            resampled_points = np.concatenate(resampled_points, axis=0)
+            ax.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
+        ax.set_xlabel("t")
+        ax.set_title("u")
+        ax.legend(loc="best")
         result_count += 1
-    ax1.set_xlabel("t")
-    ax1.set_title("u")
-    ax1.legend(loc="best")
-    ax2.set_xlabel("t")
-    ax2.set_title("u")
-    ax2.legend(loc="best")
+        plot_index += 1
     plt.savefig(os.path.join(save_dir, "figure.png"))
     plt.savefig(os.path.join(save_dir, "figure.pdf"))
 
@@ -119,27 +113,41 @@ tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
 print(args)
 resample = args.resample
+adversarial = args.adversarial
 resample_times = args.resample_times
-resample_num = args.resample_numbers
+resample_splits = args.resample_splits
+resample_ratio = args.resample_ratio
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
+num_train_samples_boundary = args.num_train_samples_boundary
+num_train_samples_initial = args.num_train_samples_initial
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
-print("resample:", resample)
-print("total data points:", num_train_samples_domain + resample_times * resample_num)
 if resample:
     prefix = "LWIS"
+elif adversarial:
+    prefix = "AT"
 else:
     prefix = "PINN"
+print("resample:", resample)
+print("adversarial:", adversarial)
+print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 geom = dde.geometry.TimeDomain(0, 1)
 ic = dde.icbc.IC(geom, lambda x: 0, boundary, component=0)
 
-if resample:
-    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain, 2, solution=func, num_test=1000)
+if resample or adversarial:
+    data = dde.data.PDE(
+        geom, ode_system, [ic],
+        num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
+        num_boundary=num_train_samples_initial,
+        solution=func, num_test=1000)
 else:
-    data = dde.data.PDE(geom, ode_system, [ic], num_train_samples_domain + resample_times * resample_num,
-                        2, solution=func, num_test=1000)
+    data = dde.data.PDE(
+        geom, ode_system, [ic],
+        num_domain=num_train_samples_domain,
+        num_boundary=num_train_samples_initial,
+        solution=func, num_test=1000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -154,15 +162,26 @@ if len(load) == 0:
 
     model = dde.Model(data, net)
     model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=[1, 100])
+    callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=0.1)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
-    else:
-        resampler = None
-        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
-    resampled_data = resampler.sampled_train_points if resampler is not None else None
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=0,
+            sample_num_initial=0,
+            sample_times=resample_times, sigma=0.1,
+            sample_splits=resample_splits)
+        callbacks.append(resampler)
+    elif adversarial:
+        resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=0,
+            sample_num_initial=0,
+            sample_times=resample_times, eta=0.01)
+        callbacks.append(resampler)
+    loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
