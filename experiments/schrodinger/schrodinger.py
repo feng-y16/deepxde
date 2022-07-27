@@ -15,13 +15,17 @@ import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-ep", "--epochs", type=int, default=20000)
-    parser.add_argument("-ntrd", "--num-train-samples-domain", type=int, default=1000)
-    parser.add_argument("-rest", "--resample-times", type=int, default=4)
-    parser.add_argument("-resn", "--resample-numbers", type=int, default=1000)
-    parser.add_argument("-r", "--resample", action="store_true", default=False)
-    parser.add_argument("-l", "--load", nargs='+', default=[])
-    parser.add_argument("-d", "--dimension", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=20000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=5000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=1000)
+    parser.add_argument("--num-train-samples-initial", type=int, default=0)
+    parser.add_argument("--resample-ratio", type=float, default=0.4)
+    parser.add_argument("--resample-times", type=int, default=4)
+    parser.add_argument("--resample-splits", type=int, default=2)
+    parser.add_argument("--resample", action="store_true", default=False)
+    parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--load", nargs='+', default=[])
+    parser.add_argument("--dimension", type=int, default=10)
     parser.add_argument("--sigma", type=float, default=0.1)
     return parser.parse_known_args()[0]
 
@@ -91,10 +95,13 @@ def test_nn(test_models=None, losses=None):
     y_exact = func(X)
     PINN_errors = dict()
     LWIS_errors = dict()
+    AT_errors = dict()
     PINN_top_k_errors = dict()
     LWIS_top_k_errors = dict()
+    AT_top_k_errors = dict()
     PINN_losses = dict()
     LWIS_losses = dict()
+    AT_losses = dict()
     top_k = 10
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
@@ -112,6 +119,11 @@ def test_nn(test_models=None, losses=None):
             PINN_errors[num_samples] = l2_difference_u
             PINN_top_k_errors[num_samples] = error
             PINN_losses[num_samples] = losses[legend]
+        elif parsed_legend[0] == "AT":
+            num_samples = int(parsed_legend[1])
+            AT_errors[num_samples] = l2_difference_u
+            AT_top_k_errors[num_samples] = error
+            AT_losses[num_samples] = losses[legend]
         else:
             num_samples = int(parsed_legend[1])
             LWIS_sigma = float(parsed_legend[2])
@@ -130,6 +142,8 @@ def test_nn(test_models=None, losses=None):
     num_samples_for_loss = PINN_losses.__iter__().__next__()
     PINN_loss = PINN_losses[num_samples_for_loss]
     ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
+    AT_loss = AT_losses[num_samples_for_loss]
+    ax1.semilogy(epochs // 20 * np.arange(len(AT_loss)), AT_loss, marker="o", label="AT", linewidth=3)
     for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
         ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
                      label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
@@ -137,6 +151,7 @@ def test_nn(test_models=None, losses=None):
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
     ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
+    ax2.plot(list(AT_errors.keys()), list(AT_errors.values()), marker="o", label="AT", linewidth=3)
     for LWIS_sigma, LWIS_error in LWIS_errors.items():
         ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                      label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
@@ -153,6 +168,8 @@ def test_nn(test_models=None, losses=None):
     num_samples_for_loss = PINN_losses.__iter__().__next__()
     PINN_loss = PINN_losses[num_samples_for_loss]
     ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
+    AT_loss = AT_losses[num_samples_for_loss]
+    ax1.semilogy(epochs // 20 * np.arange(len(AT_loss)), AT_loss, marker="o", label="AT", linewidth=3)
     for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
         ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
                      label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
@@ -160,6 +177,7 @@ def test_nn(test_models=None, losses=None):
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
     ax2.plot(list(PINN_top_k_errors.keys()), list(PINN_top_k_errors.values()), marker="o", label="PINN", linewidth=3)
+    ax2.plot(list(AT_top_k_errors.keys()), list(AT_top_k_errors.values()), marker="o", label="AT", linewidth=3)
     for LWIS_sigma, LWIS_top_k_error in LWIS_top_k_errors.items():
         ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
                      label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
@@ -177,15 +195,27 @@ tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
 print(args)
 resample = args.resample
+adversarial = args.adversarial
 resample_times = args.resample_times
-resample_num = args.resample_numbers
+resample_ratio = args.resample_ratio
+resample_splits = args.resample_splits
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
-num_resample_train_samples_domain = resample_times * resample_num
-num_all_train_samples_domain = num_train_samples_domain + num_resample_train_samples_domain
+num_train_samples_boundary = args.num_train_samples_boundary
+num_train_samples_initial = args.num_train_samples_initial
 load = args.load
+save_dir = os.path.dirname(os.path.abspath(__file__))
 d = args.dimension
 sigma = args.sigma
+if resample:
+    prefix = "LWIS_{:}_{:}".format(num_train_samples_domain, sigma)
+elif adversarial:
+    prefix = "AT_{:}".format(num_train_samples_domain)
+else:
+    prefix = "PINN_{:}".format(num_train_samples_domain)
+print("resample:", resample)
+print("adversarial:", adversarial)
+print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 
 def pde(x, y):
@@ -196,23 +226,22 @@ def func(x):
     return func_d(d, x)
 
 
-save_dir = os.path.dirname(os.path.abspath(__file__))
-if resample:
-    prefix = "LWIS_{:}_{:}".format(num_all_train_samples_domain, sigma)
-else:
-    prefix = "PINN_{:}".format(num_all_train_samples_domain)
-print("resample:", resample)
-print("total data points:", num_train_samples_domain + resample_times * resample_num)
-
 geom = dde.geometry.Hypercube([0 for _ in range(d)], [2 * np.pi for _ in range(d)])
 
 bc = dde.icbc.DirichletBC(geom, func, lambda _, on_boundary: on_boundary)
 
-if resample:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain, num_boundary=200, num_test=100000)
+if resample or adversarial:
+    data = dde.data.PDE(
+        geom, pde, [bc],
+        num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
+        num_boundary=int(num_train_samples_boundary - num_train_samples_boundary * resample_ratio),
+        num_test=20000)
 else:
-    data = dde.data.PDE(geom, pde, [bc], num_domain=num_train_samples_domain + resample_times * resample_num,
-                        num_boundary=200, num_test=100000)
+    data = dde.data.PDE(
+        geom, pde, [bc],
+        num_domain=num_train_samples_domain,
+        num_boundary=num_train_samples_boundary,
+        num_test=20000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -224,15 +253,26 @@ if len(load) == 0:
     model = dde.Model(data, net)
 
     model.compile("adam", lr=1e-3, loss_weights=[1, 100])
+    callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(period=(epochs // (resample_times + 1) + 1) // 3,
-                                                                   sample_num=resample_num, sample_count=resample_times,
-                                                                   sigma=sigma)
-        loss_history, train_state = model.train(epochs=epochs, callbacks=[resampler], display_every=epochs // 20)
-    else:
-        resampler = None
-        loss_history, train_state = model.train(epochs=epochs, display_every=epochs // 20)
-    resampled_data = resampler.sampled_train_points if resampler is not None else None
+        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
+            sample_num_initial=int(num_train_samples_initial * resample_ratio),
+            sample_times=resample_times, sigma=sigma,
+            sample_splits=resample_splits)
+        callbacks.append(resampler)
+    elif adversarial:
+        resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
+            sample_every=(epochs // (resample_times + 1) + 1) // 3,
+            sample_num_domain=int(num_train_samples_domain * resample_ratio),
+            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
+            sample_num_initial=int(num_train_samples_initial * resample_ratio),
+            sample_times=resample_times, eta=0.01)
+        callbacks.append(resampler)
+    loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}

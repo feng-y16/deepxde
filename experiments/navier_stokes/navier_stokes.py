@@ -17,16 +17,16 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=5000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=300)
-    parser.add_argument("--num-train-samples-initial", type=int, default=300)
+    parser.add_argument("--num-train-samples-domain", type=int, default=10000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=5000)
+    parser.add_argument("--num-train-samples-initial", type=int, default=5000)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
     parser.add_argument("--resample-splits", type=int, default=2)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--load", nargs='+', default=[])
-    parser.add_argument("--num-test-samples", type=int, default=256)
+    parser.add_argument("--num-test-samples", type=int, default=100)
     parser.add_argument("--re", type=float, default=100)
     return parser.parse_known_args()[0]
 
@@ -75,10 +75,6 @@ def u_func(x):
 
 
 def v_func(x):
-    return np.zeros_like(x[:, 0:1])
-
-
-def p_func(x):
     return np.zeros_like(x[:, 0:1])
 
 
@@ -191,11 +187,11 @@ def test_nn(times=None, test_models=None):
             error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
             print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u-" + legend[:4], u_min, u_max, 20)
+                    "u-" + legend.split("_")[0], u_min, u_max, 20)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v-" + legend[:4], v_min, v_max, 20)
+                    "v-" + legend.split("_")[0], v_min, v_max, 20)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p-" + legend[:4], p_min, p_max, 20)
+                    "p-" + legend.split("_")[0], p_min, p_max, 20)
             result_count += 1
         contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
         contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
@@ -250,8 +246,11 @@ print("resample:", resample)
 print("adversarial:", adversarial)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
+
 def pde(x, u):
     return pde_re(Re, x, u)
+
+
 spatial_domain = dde.geometry.Rectangle([0, 0], [1, 1])
 temporal_domain = dde.geometry.TimeDomain(0, 1)
 spatio_temporal_domain = dde.geometry.GeometryXTime(spatial_domain, temporal_domain)
@@ -260,34 +259,30 @@ boundary_condition_u = dde.icbc.DirichletBC(spatio_temporal_domain,
                                             u_func, lambda _, on_boundary: on_boundary, component=0)
 boundary_condition_v = dde.icbc.DirichletBC(spatio_temporal_domain,
                                             v_func, lambda _, on_boundary: on_boundary, component=1)
-boundary_condition_p = dde.icbc.DirichletBC(spatio_temporal_domain,
-                                            p_func, lambda _, on_boundary: on_boundary, component=2)
 
 initial_condition_u = dde.icbc.IC(spatio_temporal_domain,
                                   u_func, lambda _, on_initial: on_initial, component=0)
 initial_condition_v = dde.icbc.IC(spatio_temporal_domain,
                                   v_func, lambda _, on_initial: on_initial, component=1)
-initial_condition_p = dde.icbc.IC(spatio_temporal_domain,
-                                  p_func, lambda _, on_initial: on_initial, component=2)
 
-if resample:
+if resample or adversarial:
     data = dde.data.TimePDE(
         spatio_temporal_domain, pde,
-        [boundary_condition_u, boundary_condition_v, boundary_condition_p,
-         initial_condition_u, initial_condition_v, initial_condition_p],
+        [boundary_condition_u, boundary_condition_v,
+         initial_condition_u, initial_condition_v],
         num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
         num_boundary=int(num_train_samples_boundary - num_train_samples_boundary * resample_ratio),
         num_initial=int(num_train_samples_initial - num_train_samples_initial * resample_ratio),
-        num_test=10000)
+        num_test=20000)
 else:
     data = dde.data.TimePDE(
         spatio_temporal_domain, pde,
-        [boundary_condition_u, boundary_condition_v,  # boundary_condition_p,
-         initial_condition_u, initial_condition_v],  # initial_condition_p],
+        [boundary_condition_u, boundary_condition_v,
+         initial_condition_u, initial_condition_v],
         num_domain=num_train_samples_domain,
         num_boundary=num_train_samples_boundary,
         num_initial=num_train_samples_initial,
-        num_test=10000)
+        num_test=20000)
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
@@ -297,7 +292,7 @@ models = {}
 if len(load) == 0:
     net = dde.nn.FNN([3] + [50] * 5 + [3], "tanh", "Glorot normal")
     model = dde.Model(data, net)
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100, 100, 100])
+    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
     callbacks = []
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(
@@ -342,7 +337,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100, 100, 100])
+        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)

@@ -598,7 +598,7 @@ class PDEAdversarialAccumulativeResampler(Callback):
         @tf.function
         def op(inputs, inputs_min, inputs_max, boundary_gts, update_mask):
             y = self.model.net(inputs)
-            loss = tf.reduce_sum((y - boundary_gts) ** 2, axis=1, keepdims=True)
+            loss = tf.reduce_sum((y[:, :boundary_gts.shape[-1]] - boundary_gts) ** 2, axis=1, keepdims=True)
             inputs += self.eta * update_mask * tf.sign(jacobian(loss, inputs, i=0))
             inputs = tf.where(inputs > inputs_max, inputs_max, inputs)
             inputs = tf.where(inputs < inputs_min, inputs_min, inputs)
@@ -741,7 +741,7 @@ class PDEGradientAccumulativeResampler(Callback):
         @tf.function
         def op(inputs, boundary_gts):
             y = self.model.net(inputs)
-            loss = tf.reduce_sum((y - boundary_gts) ** 2, axis=1, keepdims=True)
+            loss = tf.reduce_sum((y[:, :boundary_gts.shape[-1]] - boundary_gts) ** 2, axis=1, keepdims=True)
             return loss_weight * tf.reduce_sum(loss, axis=1) + \
                    gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         boundary_gts = []

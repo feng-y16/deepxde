@@ -305,10 +305,10 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
             # Pressure Boundary Conditions: Homogeneous Neumann Boundary
             # Conditions everywhere except for the top, where it is a
             # homogeneous Dirichlet BC
-            p_next[:, -1] = 0
-            p_next[0, :] = 0
-            p_next[:, 0] = 0
-            p_next[-1, :] = 0
+            p_next[:, -1] = p_next[:, -2]
+            p_next[0, :] = p_next[1, :]
+            p_next[:, 0] = p_next[:, 1]
+            p_next[-1, :] = 0.0
 
             p_prev = p_next
 

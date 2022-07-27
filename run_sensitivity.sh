@@ -12,27 +12,36 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 bash clean.sh "$exp_name"
-num_train_samples_domain=500
-resample_times=4
-resample_numbers=500
+num_train_samples_domain=5000
+num_train_samples_boundary=5000
 data_multipliers=(1 2 4)
 sigmas=(0.05 0.1 0.2)
 for data_multiplier in "${data_multipliers[@]}"; do
-  num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --num-train-samples-domain ${num_train_samples} --resample-numbers 0 &> \
-  experiments/"$exp_name"/PINN_${num_train_samples}.txt &
+  --num-train-samples-domain ${current_num_train_samples_domain} \
+  --num-train-samples-boundary ${current_num_train_samples_boundary} \
+  &> experiments/"$exp_name"/PINN_${current_num_train_samples_domain}.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 done
 for data_multiplier in "${data_multipliers[@]}"; do
-  num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --num-train-samples-domain ${current_num_train_samples_domain} \
+  --num-train-samples-boundary ${current_num_train_samples_boundary} \
+  --adversarial &> experiments/"$exp_name"/AT_${current_num_train_samples_domain}.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+done
+for data_multiplier in "${data_multipliers[@]}"; do
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
   for sigma in "${sigmas[@]}"; do
-    current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
-    current_resample_numbers=$((data_multiplier*resample_numbers))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --num-train-samples-domain "${current_num_train_samples_domain}" --resample-numbers "${current_resample_numbers}" \
-    --resample-times "${resample_times}" --sigma "${sigma}" --resample &> \
-    experiments/"$exp_name"/LWIS_"${num_train_samples}"_"${sigma}".txt &
+    --num-train-samples-domain ${current_num_train_samples_domain} \
+    --num-train-samples-boundary ${current_num_train_samples_boundary} \
+    --sigma "${sigma}" --resample &> experiments/"$exp_name"/LWIS_"${current_num_train_samples_domain}"_"${sigma}".txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 done
@@ -45,20 +54,7 @@ do
   sleep 2
 done
 set -e
-draw_load=()
-for data_multiplier in "${data_multipliers[@]}"; do
-  num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
-  draw_load=("${draw_load[@]}" "PINN_${num_train_samples}")
-done
-for data_multiplier in "${data_multipliers[@]}"; do
-  num_train_samples=$((data_multiplier*(num_train_samples_domain+resample_times*resample_numbers)))
-  for sigma in "${sigmas[@]}"; do
-    draw_load=("${draw_load[@]}" "LWIS_${num_train_samples}_${sigma}")
-  done
-done
-CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
---load "${draw_load[@]}" &> experiments/"$exp_name"/draw_sensitivity.txt &
-GPU_index=$(((GPU_index+1)%num_GPUs))
+./draw.sh "$exp_name" &
 set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]
