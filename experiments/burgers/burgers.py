@@ -16,14 +16,16 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=2000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=200)
-    parser.add_argument("--num-train-samples-initial", type=int, default=200)
+    parser.add_argument("--num-train-samples-domain", type=int, default=1000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=100)
+    parser.add_argument("--num-train-samples-initial", type=int, default=100)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
     parser.add_argument("--resample-splits", type=int, default=2)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--annealing", action="store_true", default=False)
+    parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
     return parser.parse_known_args()[0]
 
@@ -121,6 +123,8 @@ args = parse_args()
 print(args)
 resample = args.resample
 adversarial = args.adversarial
+annealing = args.annealing
+loss_weights = args.loss_weights
 resample_times = args.resample_times
 resample_ratio = args.resample_ratio
 resample_splits = args.resample_splits
@@ -136,8 +140,11 @@ elif adversarial:
     prefix = "AT"
 else:
     prefix = "PINN"
+if annealing:
+    prefix += "-A"
 print("resample:", resample)
 print("adversarial:", adversarial)
+print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 geom = dde.geometry.Interval(-1, 1)
@@ -173,7 +180,7 @@ if len(load) == 0:
     net = dde.nn.FNN([2] + [20] * 3 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+    model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(
@@ -192,8 +199,11 @@ if len(load) == 0:
             sample_num_initial=int(num_train_samples_initial * resample_ratio),
             sample_times=resample_times, eta=0.01)
         callbacks.append(resampler)
+    if annealing:
+        resampler = dde.callbacks.PDELearningRateAnnealing(adjust_every=epochs // 20, loss_weights=loss_weights)
+        callbacks.append(resampler)
     loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
-    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 and prefix[:4] != "PINN" else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
@@ -205,8 +215,11 @@ if len(load) == 0:
 else:
     losses_test = {}
     for prefix in load:
-        with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
-            info = pickle.load(f)
+        try:
+            with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
+                info = pickle.load(f)
+        except FileNotFoundError:
+            continue
         net = info["net"]
         data.train_x_all = info["train_x_all"]
         data.train_x = info["train_x"]
@@ -218,7 +231,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 100, 100])
+        model.compile("adam", lr=1e-3, loss_weights=loss_weights)
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)

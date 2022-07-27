@@ -17,14 +17,16 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=10000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=5000)
-    parser.add_argument("--num-train-samples-initial", type=int, default=5000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=5000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=500)
+    parser.add_argument("--num-train-samples-initial", type=int, default=500)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
     parser.add_argument("--resample-splits", type=int, default=2)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--annealing", action="store_true", default=False)
+    parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 1, 1, 100, 100, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
     parser.add_argument("--num-test-samples", type=int, default=100)
     parser.add_argument("--re", type=float, default=100)
@@ -102,7 +104,7 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
+def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, resampled_points=None):
     ax = plt.subplot(grid)
     ax.contour(data_x, data_y, data_z, colors="k", linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
     ax.contourf(data_x, data_y, data_z, cmap="rainbow", levels=levels, vmin=v_min, vmax=v_max)
@@ -114,13 +116,15 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20):
     m.set_clim(v_min, v_max)
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
+    if resampled_points is not None:
+        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker=',', s=1, color='y')
 
 
 def test_nn(times=None, test_models=None):
     if test_models is None:
         test_models = {}
     if times is None:
-        times = [0.5, 1.0]
+        times = [0.1, 0.5, 1.0]
     test_models_pred_exact = {}
     for legend, test_model in test_models.items():
         test_models_pred_exact[legend] = [None, None, None, None, None, None]
@@ -140,6 +144,7 @@ def test_nn(times=None, test_models=None):
         u_exact = exact_data[time]["u"].reshape(-1)
         v_exact = exact_data[time]["v"].reshape(-1)
         p_exact = exact_data[time]["p"].reshape(-1)
+        p_exact -= p_exact.mean()
         num_results = len(models) + 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
@@ -155,6 +160,7 @@ def test_nn(times=None, test_models=None):
             u_pred = output[:, 0].reshape(-1)
             v_pred = output[:, 1].reshape(-1)
             p_pred = output[:, 2].reshape(-1)
+            p_pred -= p_pred.mean()
             l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
             l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
             l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
@@ -186,12 +192,17 @@ def test_nn(times=None, test_models=None):
             error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
             error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
             print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
+            resampled_points = test_model.resampled_data
+            if resampled_points is not None:
+                resampled_points = np.concatenate(resampled_points, axis=0)
+                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.05)[0]
+                resampled_points = resampled_points[selected_index][:, :2]
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u-" + legend.split("_")[0], u_min, u_max, 20)
+                    "u-" + legend.split("_")[0], u_min, u_max, 20, resampled_points)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v-" + legend.split("_")[0], v_min, v_max, 20)
+                    "v-" + legend.split("_")[0], v_min, v_max, 20, resampled_points)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p-" + legend.split("_")[0], p_min, p_max, 20)
+                    "p-" + legend.split("_")[0], p_min, p_max, 20, resampled_points)
             result_count += 1
         contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
         contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
@@ -225,6 +236,8 @@ args = parse_args()
 print(args)
 resample = args.resample
 adversarial = args.adversarial
+annealing = args.annealing
+loss_weights = args.loss_weights
 resample_times = args.resample_times
 resample_ratio = args.resample_ratio
 resample_splits = args.resample_splits
@@ -237,13 +250,17 @@ num_test_samples = args.num_test_samples
 Re = args.re
 save_dir = os.path.dirname(os.path.abspath(__file__))
 if resample:
-    prefix = "LWIS_" + str(Re)
+    prefix = "LWIS"
 elif adversarial:
-    prefix = "AT_" + str(Re)
+    prefix = "AT"
 else:
-    prefix = "PINN_" + str(Re)
+    prefix = "PINN"
+if annealing:
+    prefix += "-A"
+prefix += "_{:}".format(Re)
 print("resample:", resample)
 print("adversarial:", adversarial)
+print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 
@@ -292,7 +309,7 @@ models = {}
 if len(load) == 0:
     net = dde.nn.FNN([3] + [50] * 5 + [3], "tanh", "Glorot normal")
     model = dde.Model(data, net)
-    model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
+    model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(
@@ -311,8 +328,12 @@ if len(load) == 0:
             sample_num_initial=int(num_train_samples_initial * resample_ratio),
             sample_times=resample_times, eta=0.01)
         callbacks.append(resampler)
+    if annealing:
+        resampler = dde.callbacks.PDELearningRateAnnealing(adjust_every=epochs // 20, loss_weights=loss_weights,
+                                                           num_domain_losses=3)
+        callbacks.append(resampler)
     loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
-    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 and prefix[:4] != "PINN" else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
@@ -324,8 +345,11 @@ if len(load) == 0:
 else:
     losses_test = {}
     for prefix in load:
-        with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
-            info = pickle.load(f)
+        try:
+            with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
+                info = pickle.load(f)
+        except FileNotFoundError:
+            continue
         net = info["net"]
         data.train_x_all = info["train_x_all"]
         data.train_x = info["train_x"]
@@ -337,7 +361,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 1, 1, 100, 100, 100, 100])
+        model.compile("adam", lr=1e-3, loss_weights=loss_weights)
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)

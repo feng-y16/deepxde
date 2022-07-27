@@ -231,7 +231,7 @@ class PDE(Data):
         if boundary:
             if train_x is None:
                 train_x = self.sample_train_points(sample_prob, sample_num, self.geom.random_boundary_points)
-            self.train_x_all = np.concatenate((self.train_x_all, train_x))
+            self.train_x_all = np.concatenate((train_x, self.train_x_all))
             if initial and hasattr(self, "num_initial"):
                 self.num_initial += len(train_x)
             else:
@@ -255,10 +255,10 @@ class PDE(Data):
             if train_x is None:
                 train_x = self.sample_train_points(sample_prob, sample_num, boundary)
             self.train_x_all = np.concatenate((self.train_x_all, train_x))
+            self.num_domain += len(train_x)
             if self.pde is not None:
                 self.train_x = np.vstack((self.train_x, train_x))
-                self.train_y = self.soln(self.train_x) if self.soln else None
-            self.num_domain += len(train_x)
+            self.train_y = self.soln(self.train_x) if self.soln else None
             if self.auxiliary_var_fn is not None:
                 self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
                     config.real(np)

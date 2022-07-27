@@ -13,6 +13,7 @@ class IC:
     """Initial conditions: y([x, t0]) = func([x, t0])."""
 
     def __init__(self, geom, func, on_initial, component=0):
+        self.original_func = func
         self.geom = geom
         self.func = npfunc_range_autocache(utils.return_tensor(func))
         self.on_initial = lambda x, on: np.array(

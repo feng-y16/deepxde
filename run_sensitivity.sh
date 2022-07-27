@@ -13,7 +13,7 @@ if [ "$num_GPUs" -eq 0 ]; then
 fi
 bash clean.sh "$exp_name"
 num_train_samples_domain=5000
-num_train_samples_boundary=5000
+num_train_samples_boundary=1000
 data_multipliers=(1 2 4)
 sigmas=(0.05 0.1 0.2)
 for data_multiplier in "${data_multipliers[@]}"; do
@@ -23,6 +23,15 @@ for data_multiplier in "${data_multipliers[@]}"; do
   --num-train-samples-domain ${current_num_train_samples_domain} \
   --num-train-samples-boundary ${current_num_train_samples_boundary} \
   &> experiments/"$exp_name"/PINN_${current_num_train_samples_domain}.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+done
+for data_multiplier in "${data_multipliers[@]}"; do
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --num-train-samples-domain ${current_num_train_samples_domain} \
+  --num-train-samples-boundary ${current_num_train_samples_boundary} \
+  --annealing &> experiments/"$exp_name"/PINN-A_${current_num_train_samples_domain}.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 done
 for data_multiplier in "${data_multipliers[@]}"; do

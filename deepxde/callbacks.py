@@ -10,6 +10,7 @@ from . import config
 from . import gradients as grad
 from . import utils
 from .backend import backend_name, tf, torch, paddle
+from .icbc import IC
 from .utils import list_to_str, save_animation
 from .gradients import jacobian
 
@@ -517,6 +518,98 @@ class PDEResidualResampler(Callback):
             )
 
 
+class PDELearningRateAnnealing(Callback):
+    """Change the weights for PDE losses every given period."""
+
+    def __init__(self, adjust_every=100, alpha=0.1, loss_weights=None, num_domain_losses=1):
+        super().__init__()
+        if loss_weights is None:
+            loss_weights = [1]
+        self.adjust_every = adjust_every
+        self.alpha = alpha
+        self.loss_weights = loss_weights
+        self.num_domain_losses = num_domain_losses
+        self.epochs_since_last_adjust = 0
+        self.num_bcs_initial = None
+
+    def on_train_begin(self):
+        self.num_bcs_initial = self.model.data.num_bcs
+
+    def get_parameter_gradient(self, operator=None, bc=None, bc_index=None):
+        if bc is None:
+            assert operator is not None
+
+            @tf.function
+            def op(inputs):
+                with tf.GradientTape() as tape:
+                    y = self.model.net(inputs)
+                    outs = operator(inputs, y)
+                    loss = None
+                    if type(outs) == list:
+                        for out in outs:
+                            if loss is None:
+                                loss = tf.math.reduce_mean(out ** 2)
+                            else:
+                                loss += tf.math.reduce_mean(out ** 2)
+                    else:
+                        loss = tf.math.reduce_mean(outs ** 2)
+                    trainable_variables = (
+                            self.model.net.trainable_variables + self.model.external_trainable_variables
+                    )
+                    grads = tape.gradient(loss, trainable_variables)
+                grads_size = 0
+                grads_abs_sum = 0
+                for grad in grads:
+                    grads_size += tf.size(grad)
+                    grads_abs_sum += tf.reduce_sum(tf.abs(grad))
+                return grads_abs_sum / tf.cast(grads_size, dtype=tf.float32)
+            return utils.to_numpy(op(self.model.data.train_x[-self.model.data.num_domain:]))
+        if operator is None:
+            assert bc is not None
+            assert bc_index is not None
+
+            @tf.function
+            def op(inputs, boundary_gts, bc_index):
+                with tf.GradientTape() as tape:
+                    y = self.model.net(inputs)
+                    if bc_index is None:
+                        loss = tf.reduce_mean(tf.reduce_sum((y - boundary_gts) ** 2, axis=1, keepdims=True))
+                    else:
+                        loss = tf.reduce_mean((y[:, bc_index:bc_index+1] - boundary_gts) ** 2)
+                    trainable_variables = (
+                            self.model.net.trainable_variables + self.model.external_trainable_variables
+                    )
+                    grads = tape.gradient(loss, trainable_variables)
+                grads_abs_max = 0.0
+                for grad in grads:
+                    grad_abs_max = tf.reduce_max(tf.abs(grad))
+                    if grads_abs_max < grad_abs_max:
+                        grads_abs_max = grad_abs_max
+                return grads_abs_max
+            train_x_bc = bc.filter(self.model.data.train_x)
+            boundary_gts = bc.original_func(train_x_bc).astype(dtype=config.real(np))
+            return utils.to_numpy(op(train_x_bc, boundary_gts, bc_index))
+
+    def on_epoch_end(self):
+        self.epochs_since_last_adjust += 1
+        if self.epochs_since_last_adjust < self.adjust_every:
+            return
+        self.epochs_since_last_adjust = 0
+        domain_average_grad = self.get_parameter_gradient(operator=self.model.data.pde)
+        for i in range(len(self.model.data.bcs)):
+            bc = self.model.data.bcs[i]
+            if hasattr(bc, "component"):
+                bc_index = bc.component
+            else:
+                bc_index = None
+            boundary_max_grad = self.get_parameter_gradient(bc=bc, bc_index=bc_index)
+            new_weight = boundary_max_grad / domain_average_grad
+            self.loss_weights[i + self.num_domain_losses] = \
+                (1 - self.alpha) * self.loss_weights[i + self.num_domain_losses] + self.alpha * new_weight
+        self.model.compile("adam", lr=1e-3, loss_weights=self.loss_weights)
+        print(self.loss_weights)
+
+
 class PDEAdversarialAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
@@ -617,7 +710,7 @@ class PDEAdversarialAccumulativeResampler(Callback):
         update_mask = np.logical_or(np.isclose(x, x_min), np.isclose(x, x_max)).astype(config.real(np))
         boundary_gts = []
         for bc in bcs:
-            if hasattr(bc, "original_func"):
+            if type(bc) != IC or len(bcs) == 1:
                 boundary_gts.append(bc.original_func(x).astype(dtype=config.real(np)))
         boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
         for _ in range(self.k):
@@ -672,7 +765,7 @@ class PDEGradientAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
-                 sample_num_initial=0, sigma=1, top_k=100, sample_splits=2):
+                 sample_num_initial=0, sigma=1, top_k=1000, sample_splits=2):
         super().__init__()
         self.sample_every = sample_every
         self.sample_times = sample_times
@@ -692,7 +785,7 @@ class PDEGradientAccumulativeResampler(Callback):
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
 
-    def get_weights_domain(self, x, operator, loss_weight=0.5, gradient_weight=0.5):
+    def get_weights_domain(self, x, operator, loss_weight=0.5):
         if isinstance(x, tuple):
             x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
         else:
@@ -714,7 +807,7 @@ class PDEGradientAccumulativeResampler(Callback):
                 else:
                     loss = outs ** 2
                 return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                       gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                       (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         else:
             assert utils.get_num_args(operator) == 3
             aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
@@ -733,20 +826,20 @@ class PDEGradientAccumulativeResampler(Callback):
                 else:
                     loss = outs ** 2
                 return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                       gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                       (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         return utils.to_numpy(op(x))
 
-    def get_weights_boundary(self, x, bcs, loss_weight=0.5, gradient_weight=0.5):
+    def get_weights_boundary(self, x, bcs, loss_weight=0.5):
 
         @tf.function
         def op(inputs, boundary_gts):
             y = self.model.net(inputs)
             loss = tf.reduce_sum((y[:, :boundary_gts.shape[-1]] - boundary_gts) ** 2, axis=1, keepdims=True)
             return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                   gradient_weight * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                   (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         boundary_gts = []
         for bc in bcs:
-            if hasattr(bc, "original_func"):
+            if type(bc) != IC or len(bcs) == 1:
                 boundary_gts.append(bc.original_func(x))
         boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
         return utils.to_numpy(op(x, boundary_gts))
@@ -773,9 +866,10 @@ class PDEGradientAccumulativeResampler(Callback):
         else:
             sampled_points_initial = None
         for i in range(self.sample_splits):
-            domain_points_all = np.concatenate((self.model.data.train_x, sampled_points_domain), axis=0)
+            domain_points_all = np.concatenate((self.model.data.train_x[-self.model.data.num_domain:],
+                                                sampled_points_domain), axis=0)
             weight = jnp.array(self.get_weights_domain(domain_points_all, self.model.data.pde))
-            target_indexes = jnp.argsort(-weight)[: self.top_k]
+            target_indexes = jnp.argsort(-weight)[:self.top_k]
             weight = weight[target_indexes]
             weight /= jnp.sum(weight)
             x = jnp.expand_dims(domain_points_all[target_indexes, :], axis=0)
@@ -799,7 +893,7 @@ class PDEGradientAccumulativeResampler(Callback):
             if self.sample_num_initial > 0:
                 boundary_points_all = np.concatenate((boundary_points_all, sampled_points_initial), axis=0)
             weight = jnp.array(self.get_weights_boundary(boundary_points_all, self.model.data.bcs))
-            target_indexes = jnp.argsort(-weight)[: self.top_k]
+            target_indexes = jnp.argsort(-weight)[:self.top_k]
             weight = weight[target_indexes]
             weight /= jnp.sum(weight)
             x = jnp.expand_dims(boundary_points_all[target_indexes, :], axis=0)
@@ -826,11 +920,20 @@ class PDEGradientAccumulativeResampler(Callback):
             self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
         if self.sample_num_initial > 0:
             self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
-        sampled_train_points = sampled_points_domain
+        sampled_train_points = sampled_points_domain[self.sample_num_domain // 2 + self.sample_num_domain % 2 +
+                                                     (self.sample_num_domain // 2) % self.sample_splits:]
         if self.sample_num_boundary > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
+            sampled_train_points = np.concatenate((sampled_train_points,
+                                                   sampled_points_boundary[self.sample_num_boundary // 2 +
+                                                                           self.sample_num_boundary % 2 +
+                                                                           (self.sample_num_boundary // 2) %
+                                                                           self.sample_splits:]), axis=0)
         if self.sample_num_initial > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
+            sampled_train_points = np.concatenate((sampled_train_points,
+                                                   sampled_points_initial[self.sample_num_initial // 2 +
+                                                                          self.sample_num_initial % 2 +
+                                                                          (self.sample_num_initial // 2) %
+                                                                          self.sample_splits:]), axis=0)
         self.sampled_train_points.append(sampled_train_points)
         self.print_info()
 

@@ -13,20 +13,37 @@ if [ "$num_GPUs" -eq 0 ]; then
 fi
 bash clean.sh "$exp_name"
 if [ "$exp_name" == "navier_stokes" ]; then
-  res=(10 100 1000)
-  num_train_sample_domain=10000
+  res=(10 100)
+  num_train_samples_domain_per_re=500
+  num_train_samples_boundary_per_re=50
+  num_train_samples_initial_per_re=50
   for re in "${res[@]}"; do
+    num_train_samples_domain=$((re*num_train_samples_domain_per_re))
+    num_train_samples_boundary=$((re*num_train_samples_boundary_per_re))
+    num_train_samples_initial=$((re*num_train_samples_initial_per_re))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --re "$re" --num-train-samples-domain $num_train_sample_domain \
-    &> experiments/"$exp_name"/PINN_"$re".0.txt &
+    --num-train-samples-domain $num_train_samples_domain \
+    --num-train-samples-boundary $num_train_samples_boundary \
+    --num-train-samples-initial $num_train_samples_initial \
+    --re "$re" &> experiments/"$exp_name"/PINN_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --resample --re "$re" --num-train-samples-domain $num_train_sample_domain \
-    &> experiments/"$exp_name"/LWIS_"$re".0.txt &
+    --num-train-samples-domain $num_train_samples_domain \
+    --num-train-samples-boundary $num_train_samples_boundary \
+    --num-train-samples-initial $num_train_samples_initial \
+    --re "$re" --annealing &> experiments/"$exp_name"/PINN-A_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --adversarial --re "$re" --num-train-samples-domain $num_train_sample_domain \
-    &> experiments/"$exp_name"/AT_"$re".0.txt &
+    --num-train-samples-domain $num_train_samples_domain \
+    --num-train-samples-boundary $num_train_samples_boundary \
+    --num-train-samples-initial $num_train_samples_initial \
+    --re "$re" --resample &> experiments/"$exp_name"/LWIS_"$re".0.txt &
+    GPU_index=$(((GPU_index+1)%num_GPUs))
+    CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+    --num-train-samples-domain $num_train_samples_domain \
+    --num-train-samples-boundary $num_train_samples_boundary \
+    --num-train-samples-initial $num_train_samples_initial \
+    --re "$re" --adversarial &> experiments/"$exp_name"/AT_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 elif [ "$exp_name" == "schrodinger" ]; then
@@ -35,6 +52,9 @@ elif [ "$exp_name" == "schrodinger" ]; then
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   &> experiments/"$exp_name"/PINN.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --annealing &> experiments/"$exp_name"/PINN-A.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --resample &> experiments/"$exp_name"/LWIS.txt &

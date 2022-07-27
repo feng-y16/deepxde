@@ -24,6 +24,8 @@ def parse_args():
     parser.add_argument("--resample-splits", type=int, default=2)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
+    parser.add_argument("--annealing", action="store_true", default=False)
+    parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100])
     parser.add_argument("--load", nargs='+', default=[])
     parser.add_argument("--dimension", type=int, default=10)
     parser.add_argument("--sigma", type=float, default=0.1)
@@ -93,15 +95,9 @@ def test_nn(test_models=None, losses=None):
         losses = {}
     X = test_models[list(test_models.keys())[0]].data.test_x
     y_exact = func(X)
-    PINN_errors = dict()
-    LWIS_errors = dict()
-    AT_errors = dict()
-    PINN_top_k_errors = dict()
-    LWIS_top_k_errors = dict()
-    AT_top_k_errors = dict()
-    PINN_losses = dict()
-    LWIS_losses = dict()
-    AT_losses = dict()
+    model_errors = dict()
+    model_top_k_errors = dict()
+    model_losses = dict()
     top_k = 10
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
@@ -114,47 +110,50 @@ def test_nn(test_models=None, losses=None):
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
         parsed_legend = legend.split("_")
-        if parsed_legend[0] == "PINN":
+        if parsed_legend[0] not in model_errors.keys():
+            model_errors[parsed_legend[0]] = dict()
+            model_top_k_errors[parsed_legend[0]] = dict()
+            model_losses[parsed_legend[0]] = dict()
+        if parsed_legend[0] != "LWIS" and parsed_legend[0] != "LWIS-A":
             num_samples = int(parsed_legend[1])
-            PINN_errors[num_samples] = l2_difference_u
-            PINN_top_k_errors[num_samples] = error
-            PINN_losses[num_samples] = losses[legend]
-        elif parsed_legend[0] == "AT":
-            num_samples = int(parsed_legend[1])
-            AT_errors[num_samples] = l2_difference_u
-            AT_top_k_errors[num_samples] = error
-            AT_losses[num_samples] = losses[legend]
+            model_errors[parsed_legend[0]][num_samples] = l2_difference_u
+            model_top_k_errors[parsed_legend[0]][num_samples] = error
+            model_losses[parsed_legend[0]][num_samples] = losses[legend]
         else:
             num_samples = int(parsed_legend[1])
             LWIS_sigma = float(parsed_legend[2])
-            if LWIS_sigma not in LWIS_errors.keys():
-                LWIS_errors[LWIS_sigma] = dict()
-                LWIS_top_k_errors[LWIS_sigma] = dict()
-            LWIS_errors[LWIS_sigma][num_samples] = l2_difference_u
-            LWIS_top_k_errors[LWIS_sigma][num_samples] = error
-            if num_samples not in LWIS_losses.keys():
-                LWIS_losses[num_samples] = dict()
-            LWIS_losses[num_samples][LWIS_sigma] = losses[legend]
+            if LWIS_sigma not in model_errors[parsed_legend[0]].keys():
+                model_errors[parsed_legend[0]][LWIS_sigma] = dict()
+                model_top_k_errors[parsed_legend[0]][LWIS_sigma] = dict()
+            model_errors[parsed_legend[0]][LWIS_sigma][num_samples] = l2_difference_u
+            model_top_k_errors[parsed_legend[0]][LWIS_sigma][num_samples] = error
+            if num_samples not in model_losses[parsed_legend[0]].keys():
+                model_losses[parsed_legend[0]][num_samples] = dict()
+            model_losses[parsed_legend[0]][num_samples][LWIS_sigma] = losses[legend]
     plt.figure(figsize=(12, 4))
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
-    num_samples_for_loss = PINN_losses.__iter__().__next__()
-    PINN_loss = PINN_losses[num_samples_for_loss]
-    ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
-    AT_loss = AT_losses[num_samples_for_loss]
-    ax1.semilogy(epochs // 20 * np.arange(len(AT_loss)), AT_loss, marker="o", label="AT", linewidth=3)
-    for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
-        ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
+    for prefix in model_losses.keys():
+        if prefix != "LWIS" and prefix != "LWIS-A":
+            model_loss = model_losses[prefix][num_samples_for_loss]
+            ax1.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
+        else:
+            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
+                ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+                             label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
-    ax2.plot(list(PINN_errors.keys()), list(PINN_errors.values()), marker="o", label="PINN", linewidth=3)
-    ax2.plot(list(AT_errors.keys()), list(AT_errors.values()), marker="o", label="AT", linewidth=3)
-    for LWIS_sigma, LWIS_error in LWIS_errors.items():
-        ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
-                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    for prefix in model_errors.keys():
+        if prefix != "LWIS" and prefix != "LWIS-A":
+            ax2.semilogx(list(model_errors[prefix].keys()), list(model_errors[prefix].values()),
+                         marker="o", label=prefix, linewidth=3)
+        else:
+            for LWIS_sigma, LWIS_error in model_errors[prefix].items():
+                ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+                             label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
     ax2.set_ylabel(r"$l_2$ Relative Error")
     ax2.legend(loc="best")
@@ -165,22 +164,26 @@ def test_nn(test_models=None, losses=None):
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
-    num_samples_for_loss = PINN_losses.__iter__().__next__()
-    PINN_loss = PINN_losses[num_samples_for_loss]
-    ax1.semilogy(epochs // 20 * np.arange(len(PINN_loss)), PINN_loss, marker="o", label="PINN", linewidth=3)
-    AT_loss = AT_losses[num_samples_for_loss]
-    ax1.semilogy(epochs // 20 * np.arange(len(AT_loss)), AT_loss, marker="o", label="AT", linewidth=3)
-    for LWIS_sigma, LWIS_loss in LWIS_losses[num_samples_for_loss].items():
-        ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
+    for prefix in model_errors.keys():
+        if prefix != "LWIS" and prefix != "LWIS-A":
+            model_loss = model_losses[prefix][num_samples_for_loss]
+            ax1.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
+        else:
+            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
+                ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+                             label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Testing Loss")
     ax1.legend(loc="best")
-    ax2.plot(list(PINN_top_k_errors.keys()), list(PINN_top_k_errors.values()), marker="o", label="PINN", linewidth=3)
-    ax2.plot(list(AT_top_k_errors.keys()), list(AT_top_k_errors.values()), marker="o", label="AT", linewidth=3)
-    for LWIS_sigma, LWIS_top_k_error in LWIS_top_k_errors.items():
-        ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
-                     label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
+    for prefix in model_top_k_errors.keys():
+        if prefix != "LWIS" and prefix != "LWIS-A":
+            ax2.semilogx(list(model_top_k_errors[prefix].keys()), list(model_top_k_errors[prefix].values()),
+                         marker="o", label=prefix, linewidth=3)
+        else:
+            for LWIS_sigma, LWIS_top_k_error in model_top_k_errors[prefix].items():
+                ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
+                             label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Training Samples")
     ax2.set_ylabel("Top {:} Error".format(top_k))
     ax2.legend(loc="best")
@@ -196,6 +199,8 @@ args = parse_args()
 print(args)
 resample = args.resample
 adversarial = args.adversarial
+annealing = args.annealing
+loss_weights = args.loss_weights
 resample_times = args.resample_times
 resample_ratio = args.resample_ratio
 resample_splits = args.resample_splits
@@ -208,13 +213,20 @@ save_dir = os.path.dirname(os.path.abspath(__file__))
 d = args.dimension
 sigma = args.sigma
 if resample:
-    prefix = "LWIS_{:}_{:}".format(num_train_samples_domain, sigma)
+    prefix = "LWIS"
 elif adversarial:
-    prefix = "AT_{:}".format(num_train_samples_domain)
+    prefix = "AT"
 else:
-    prefix = "PINN_{:}".format(num_train_samples_domain)
+    prefix = "PINN"
+if annealing:
+    prefix += "-A"
+if prefix[:4] == "LWIS":
+    prefix += "_{:}_{:}".format(num_train_samples_domain, sigma)
+else:
+    prefix += "_{:}".format(num_train_samples_domain)
 print("resample:", resample)
 print("adversarial:", adversarial)
+print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
 
 
@@ -252,7 +264,7 @@ if len(load) == 0:
     net = dde.nn.FNN([d] + [50] * 5 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
-    model.compile("adam", lr=1e-3, loss_weights=[1, 100])
+    model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
         resampler = dde.callbacks.PDEGradientAccumulativeResampler(
@@ -271,8 +283,11 @@ if len(load) == 0:
             sample_num_initial=int(num_train_samples_initial * resample_ratio),
             sample_times=resample_times, eta=0.01)
         callbacks.append(resampler)
+    if annealing:
+        resampler = dde.callbacks.PDELearningRateAnnealing(adjust_every=epochs // 20, loss_weights=loss_weights)
+        callbacks.append(resampler)
     loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
-    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 else None
+    resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 and prefix[:4] != "PINN" else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,
             "loss_history": loss_history, "train_state": train_state, "resampled_data": resampled_data}
@@ -284,8 +299,11 @@ if len(load) == 0:
 else:
     losses_test = {}
     for prefix in load:
-        with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
-            info = pickle.load(f)
+        try:
+            with open(os.path.join(save_dir, prefix + "_info.pkl"), "rb") as f:
+                info = pickle.load(f)
+        except FileNotFoundError:
+            continue
         net = info["net"]
         data.train_x_all = info["train_x_all"]
         data.train_x = info["train_x"]
@@ -297,7 +315,7 @@ else:
         train_state = info["train_state"]
         resampled_data = info["resampled_data"]
         model = dde.Model(data, net)
-        model.compile("adam", lr=1e-3, loss_weights=[1, 100])
+        model.compile("adam", lr=1e-3, loss_weights=loss_weights)
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)

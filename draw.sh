@@ -12,15 +12,13 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 if [ "$exp_name" == "navier_stokes" ]; then
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_10.0 LWIS_10.0 AT_10.0 --re 10 &> experiments/"$exp_name"/draw_10.0.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_100.0 LWIS_100.0 AT_100.0 --re 100 &> experiments/"$exp_name"/draw_100.0.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN_1000.0 LWIS_1000.0 AT_1000.0 --re 1000 &> experiments/"$exp_name"/draw_1000.0.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
+  res=(10 100)
+  for re in "${res[@]}"; do
+    CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+    --load PINN_"$re".0 PINN-A_"$re".0 AT_"$re".0 LWIS_"$re".0 --re "$re" \
+    &> experiments/"$exp_name"/draw_"$re".0.txt &
+    GPU_index=$(((GPU_index+1)%num_GPUs))
+  done
 elif [ "$exp_name" == "schrodinger" ]; then
   num_train_samples_domain=5000
   data_multipliers=(1 2 4)
@@ -28,7 +26,8 @@ elif [ "$exp_name" == "schrodinger" ]; then
   draw_load=()
   for data_multiplier in "${data_multipliers[@]}"; do
     current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
-    draw_load=("${draw_load[@]}" "PINN_${current_num_train_samples_domain}" "AT_${current_num_train_samples_domain}")
+    draw_load=("${draw_load[@]}" "PINN_${current_num_train_samples_domain}" \
+    "PINN-A_${current_num_train_samples_domain}" "AT_${current_num_train_samples_domain}")
   done
   for data_multiplier in "${data_multipliers[@]}"; do
     current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
@@ -41,6 +40,6 @@ elif [ "$exp_name" == "schrodinger" ]; then
   GPU_index=$(((GPU_index+1)%num_GPUs))
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN AT LWIS &> experiments/"$exp_name"/draw.txt &
+  --load PINN PINN-A AT LWIS &> experiments/"$exp_name"/draw.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
