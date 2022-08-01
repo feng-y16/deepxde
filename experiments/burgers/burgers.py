@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
+    parser.add_argument("--draw-annealing", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
 
@@ -70,10 +71,13 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def test_nn(test_models=None):
+def test_nn(test_models=None, draw_annealing=False):
     if test_models is None:
         test_models = {}
-    num_results = len(models) + 1
+    num_results = len(test_models)
+    if not draw_annealing:
+        num_results //= 2
+    num_results += 1
     plt.figure(figsize=(12, 3 * num_results))
     gs = GridSpec(num_results, 1)
     X, y_exact, t, x = gen_testdata()
@@ -88,6 +92,8 @@ def test_nn(test_models=None):
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
+        if not draw_annealing and legend.split("_")[0][-2:] == "-A":
+            continue
         ax = plt.subplot(gs[result_count, 0])
         fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_pred.reshape(len(t), len(x)),
                             cmap="rainbow")
@@ -101,7 +107,7 @@ def test_nn(test_models=None):
         resampled_points = test_model.resampled_data
         if resampled_points is not None:
             resampled_points = np.concatenate(resampled_points, axis=0)
-            ax.scatter(resampled_points[:, 1], resampled_points[:, 0], marker=',', s=1, color='y')
+            ax.scatter(resampled_points[:, 1], resampled_points[:, 0], marker='X', s=10, color='black')
         result_count += 1
     ax = plt.subplot(gs[-1, 0])
     fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
@@ -236,5 +242,5 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models)
+    test_nn(test_models=models, draw_annealing=args.draw_annealing)
     print("draw complete", file=sys.stderr)

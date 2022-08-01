@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 1, 1, 100, 100, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
+    parser.add_argument("--draw-annealing", action="store_true", default=False)
     parser.add_argument("--num-test-samples", type=int, default=100)
     parser.add_argument("--re", type=float, default=100)
     return parser.parse_known_args()[0]
@@ -117,10 +118,10 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, re
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
     if resampled_points is not None:
-        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker=',', s=1, color='y')
+        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker='X', s=10, color='black')
 
 
-def test_nn(times=None, test_models=None):
+def test_nn(times=None, test_models=None, draw_annealing=False):
     if test_models is None:
         test_models = {}
     if times is None:
@@ -145,7 +146,10 @@ def test_nn(times=None, test_models=None):
         v_exact = exact_data[time]["v"].reshape(-1)
         p_exact = exact_data[time]["p"].reshape(-1)
         p_exact -= p_exact.mean()
-        num_results = len(models) + 1
+        num_results = len(test_models)
+        if not draw_annealing:
+            num_results //= 2
+        num_results += 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
         u_min = np.min(u_exact)
@@ -192,10 +196,12 @@ def test_nn(times=None, test_models=None):
             error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
             error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
             print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
+            if not draw_annealing and legend.split("_")[0][-2:] == "-A":
+                continue
             resampled_points = test_model.resampled_data
             if resampled_points is not None:
                 resampled_points = np.concatenate(resampled_points, axis=0)
-                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.05)[0]
+                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.01)[0]
                 resampled_points = resampled_points[selected_index][:, :2]
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
                     "u-" + legend.split("_")[0], u_min, u_max, 20, resampled_points)
@@ -366,5 +372,5 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models)
+    test_nn(test_models=models, draw_annealing=args.draw_annealing)
     print("draw complete", file=sys.stderr)

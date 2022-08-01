@@ -9,6 +9,7 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
+from matplotlib.patches import ConnectionPatch
 import tensorflow as tf
 import datetime
 
@@ -27,6 +28,7 @@ def parse_args():
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100])
     parser.add_argument("--load", nargs='+', default=[])
+    parser.add_argument("--draw-annealing", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
 
@@ -73,18 +75,67 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def test_nn(test_models=None):
+def zone_and_linked(ax, axins, zone_left, zone_right, x, y, linked='bottom',
+                    x_ratio=0.1, y_ratio=0.3):
+    # references: https://blog.csdn.net/weixin_45826022/article/details/113486448
+    """缩放内嵌图形，并且进行连线
+    ax:         调用plt.subplots返回的画布。例如： fig,ax = plt.subplots(1,1)
+    axins:      内嵌图的画布。 例如 axins = ax.inset_axes((0.4,0.1,0.4,0.3))
+    zone_left:  要放大区域的横坐标左端点
+    zone_right: 要放大区域的横坐标右端点
+    x:          X轴标签
+    y:          列表，所有y值
+    linked:     进行连线的位置，{'bottom','top','left','right'}
+    x_ratio:    X轴缩放比例
+    y_ratio:    Y轴缩放比例
+    """
+    xlim_left = x[zone_left] - (x[zone_right] - x[zone_left]) * x_ratio
+    xlim_right = x[zone_right] + (x[zone_right] - x[zone_left]) * x_ratio
+
+    y_data = np.hstack([yi[zone_left:zone_right] for yi in y])
+    ylim_bottom = np.min(y_data[:, 0]) - (np.max(y_data[:, 0]) - np.min(y_data[:, 0])) * y_ratio
+    ylim_top = np.max(y_data[:, 0]) + (np.max(y_data[:, 0]) - np.min(y_data[:, 0])) * y_ratio
+
+    axins.set_xlim(xlim_left, xlim_right)
+    axins.set_ylim(ylim_bottom, ylim_top)
+
+    ax.plot([xlim_left, xlim_right, xlim_right, xlim_left, xlim_left],
+            [ylim_bottom, ylim_bottom, ylim_top, ylim_top, ylim_bottom], "black")
+
+    if linked == 'bottom':
+        xyA_1, xyB_1 = (xlim_left, ylim_top), (xlim_left, ylim_bottom)
+        xyA_2, xyB_2 = (xlim_right, ylim_top), (xlim_right, ylim_bottom)
+    elif linked == 'top':
+        xyA_1, xyB_1 = (xlim_left, ylim_bottom), (xlim_left, ylim_top)
+        xyA_2, xyB_2 = (xlim_right, ylim_bottom), (xlim_right, ylim_top)
+    elif linked == 'left':
+        xyA_1, xyB_1 = (xlim_right, ylim_top), (xlim_left, ylim_top)
+        xyA_2, xyB_2 = (xlim_right, ylim_bottom), (xlim_left, ylim_bottom)
+    elif linked == 'right':
+        xyA_1, xyB_1 = (xlim_left, ylim_top), (xlim_right, ylim_top)
+        xyA_2, xyB_2 = (xlim_left, ylim_bottom), (xlim_right, ylim_bottom)
+
+    con = ConnectionPatch(xyA=xyA_1, xyB=xyB_1, coordsA="data",
+                          coordsB="data", axesA=axins, axesB=ax)
+    axins.add_artist(con)
+    con = ConnectionPatch(xyA=xyA_2, xyB=xyB_2, coordsA="data",
+                          coordsB="data", axesA=axins, axesB=ax)
+    axins.add_artist(con)
+
+
+def test_nn(test_models=None, draw_annealing=False):
     if test_models is None:
         test_models = {}
-    plt.figure(figsize=(len(test_models) * 5, 4))
-    gs = GridSpec(1, len(test_models))
+    num_results = len(test_models)
+    if not draw_annealing:
+        num_results //= 2
+    plt.figure(figsize=(num_results * 5, 4))
+    gs = GridSpec(1, num_results)
     x = np.linspace(0, 1, 10000)
     y_exact = func(x.reshape(-1, 1))
     result_count = 0
     plot_index = 0
     for legend, test_model in test_models.items():
-        ax = plt.subplot(gs[0, plot_index])
-        ax.plot(x, y_exact, label="exact", linewidth=3)
         y_pred = test_model.predict(x.reshape(-1, 1))
         pde_pred = test_model.predict(x.reshape(-1, 1), operator=ode_system)
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
@@ -95,11 +146,21 @@ def test_nn(test_models=None):
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("Top {:} error: {:.3f}".format(top_k, error))
+        if not draw_annealing and legend.split("_")[0][-2:] == "-A":
+            continue
+        ax = plt.subplot(gs[0, plot_index])
+        ax.plot(x, y_exact, label="exact", linewidth=3)
         ax.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
+        ax_insert = ax.inset_axes((0.63, 0.4, 0.3, 0.3))
+        ax_insert.plot(x, y_exact, label="exact", linewidth=3)
+        ax_insert.plot(x, y_pred, label=legend, linewidth=3, linestyle="--")
+        zone_and_linked(ax, ax_insert, 50, 500, x, [y_exact, y_pred], "right")
+        ax_insert.set_xticks([])
+        ax_insert.set_yticks([])
         resampled_points = test_model.resampled_data
         if resampled_points is not None:
             resampled_points = np.concatenate(resampled_points, axis=0)
-            ax.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker=',', s=1, color='y')
+            ax.scatter(resampled_points[:, 0], np.zeros_like(resampled_points[:, 0]), marker='X', s=10, color='black')
         ax.set_xlabel("t")
         ax.set_title("u")
         ax.legend(loc="best")
@@ -224,5 +285,5 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models)
+    test_nn(test_models=models, draw_annealing=args.draw_annealing)
     print("draw complete", file=sys.stderr)

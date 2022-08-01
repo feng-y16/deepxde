@@ -46,11 +46,32 @@ done
 for data_multiplier in "${data_multipliers[@]}"; do
   current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
   current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
+  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+  --num-train-samples-domain ${current_num_train_samples_domain} \
+  --num-train-samples-boundary ${current_num_train_samples_boundary} \
+  --adversarial --annealing &> experiments/"$exp_name"/AT-A_${current_num_train_samples_domain}.txt &
+  GPU_index=$(((GPU_index+1)%num_GPUs))
+done
+for data_multiplier in "${data_multipliers[@]}"; do
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
   for sigma in "${sigmas[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
     --num-train-samples-domain ${current_num_train_samples_domain} \
     --num-train-samples-boundary ${current_num_train_samples_boundary} \
     --sigma "${sigma}" --resample &> experiments/"$exp_name"/LWIS_"${current_num_train_samples_domain}"_"${sigma}".txt &
+    GPU_index=$(((GPU_index+1)%num_GPUs))
+  done
+done
+for data_multiplier in "${data_multipliers[@]}"; do
+  current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
+  current_num_train_samples_boundary=$((data_multiplier*num_train_samples_boundary))
+  for sigma in "${sigmas[@]}"; do
+    CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+    --num-train-samples-domain ${current_num_train_samples_domain} \
+    --num-train-samples-boundary ${current_num_train_samples_boundary} \
+    --sigma "${sigma}" --resample --annealing \
+    &> experiments/"$exp_name"/LWIS-A_"${current_num_train_samples_domain}"_"${sigma}".txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 done
