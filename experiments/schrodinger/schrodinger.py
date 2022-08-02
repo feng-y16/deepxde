@@ -77,7 +77,7 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        if legend not in ["PINN_30000", "LWIS_30000_1.0"]:
+        if legend not in ["PINN_10000", "LWIS_10000_0.1"]:
             continue
         ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
         ax.set_xlabel("Epochs")
@@ -101,14 +101,10 @@ def test_nn(test_models=None, losses=None):
     top_k = 10
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(X)
-        pde_pred = test_model.predict(X, operator=pde)
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
-        print(legend)
-        print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error: {:.3f}".format(l2_difference_u))
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
-        print("Top {:} error: {:.3f}".format(top_k, error))
+        print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
         parsed_legend = legend.split("_")
         if parsed_legend[0] not in model_errors.keys():
             model_errors[parsed_legend[0]] = dict()
@@ -134,47 +130,16 @@ def test_nn(test_models=None, losses=None):
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
-    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
-    for prefix in model_losses.keys():
-        if prefix != "LWIS" and prefix != "LWIS-A":
-            model_loss = model_losses[prefix][num_samples_for_loss]
-            ax1.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
-        else:
-            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
-                ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                             label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
-    ax1.set_xlabel("Epochs")
-    ax1.set_ylabel("Testing Loss")
-    ax1.legend(loc="best")
     for prefix in model_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
-            ax2.semilogx(list(model_errors[prefix].keys()), list(model_errors[prefix].values()),
+            ax1.semilogx(list(model_errors[prefix].keys()), list(model_errors[prefix].values()),
                          marker="o", label=prefix, linewidth=3)
         else:
             for LWIS_sigma, LWIS_error in model_errors[prefix].items():
-                ax2.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+                ax1.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                              label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    ax2.set_xlabel("Number of Training Samples")
-    ax2.set_ylabel(r"$l_2$ Relative Error")
-    ax2.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
-    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
-    plt.close()
-    plt.figure(figsize=(12, 4))
-    gs = GridSpec(1, 2)
-    ax1 = plt.subplot(gs[0, 0])
-    ax2 = plt.subplot(gs[0, 1])
-    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
-    for prefix in model_errors.keys():
-        if prefix != "LWIS" and prefix != "LWIS-A":
-            model_loss = model_losses[prefix][num_samples_for_loss]
-            ax1.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
-        else:
-            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
-                ax1.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                             label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
-    ax1.set_xlabel("Epochs")
-    ax1.set_ylabel("Testing Loss")
+    ax1.set_xlabel("Number of Training Samples")
+    ax1.set_ylabel(r"$l_2$ Relative Error")
     ax1.legend(loc="best")
     for prefix in model_top_k_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
@@ -187,8 +152,26 @@ def test_nn(test_models=None, losses=None):
     ax2.set_xlabel("Number of Training Samples")
     ax2.set_ylabel("Top {:} Error".format(top_k))
     ax2.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "sensitivity_top{:}.pdf".format(top_k)))
-    plt.savefig(os.path.join(save_dir, "sensitivity_top{:}.png".format(top_k)))
+    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
+    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+    plt.close()
+    plt.figure(figsize=(6, 4))
+    gs = GridSpec(1, 1)
+    ax = plt.subplot(gs[0, 0])
+    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
+    for prefix in model_losses.keys():
+        if prefix != "LWIS" and prefix != "LWIS-A":
+            model_loss = model_losses[prefix][num_samples_for_loss]
+            ax.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
+        else:
+            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
+                ax.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
+                            label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Testing Loss")
+    ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "loss_all.pdf"))
+    plt.savefig(os.path.join(save_dir, "loss_all.png"))
     plt.close()
 
 
@@ -267,7 +250,7 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+        resampler = dde.callbacks.PDELossAccumulativeResampler(
             sample_every=(epochs // (resample_times + 1) + 1) // 3,
             sample_num_domain=int(num_train_samples_domain * resample_ratio),
             sample_num_boundary=int(num_train_samples_boundary * resample_ratio),

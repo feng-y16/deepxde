@@ -761,7 +761,7 @@ class PDEAdversarialAccumulativeResampler(Callback):
         print("")
 
 
-class PDEGradientAccumulativeResampler(Callback):
+class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
@@ -785,7 +785,7 @@ class PDEGradientAccumulativeResampler(Callback):
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
 
-    def get_weights_domain(self, x, operator, loss_weight=0.5):
+    def get_weights_domain(self, x, operator, loss_weight=1.0):
         if isinstance(x, tuple):
             x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
         else:
@@ -829,7 +829,7 @@ class PDEGradientAccumulativeResampler(Callback):
                        (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
         return utils.to_numpy(op(x))
 
-    def get_weights_boundary(self, x, bcs, loss_weight=0.5):
+    def get_weights_boundary(self, x, bcs, loss_weight=1.0):
 
         @tf.function
         def op(inputs, boundary_gts):

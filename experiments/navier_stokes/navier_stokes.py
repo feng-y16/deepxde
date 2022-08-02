@@ -125,7 +125,7 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
     if test_models is None:
         test_models = {}
     if times is None:
-        times = [0.1, 0.5, 1.0]
+        times = [0.5, 1.0]
     test_models_pred_exact = {}
     for legend, test_model in test_models.items():
         test_models_pred_exact[legend] = [None, None, None, None, None, None]
@@ -222,9 +222,6 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         l2_difference_u = dde.metrics.l2_relative_error(u_exact, u_pred)
         l2_difference_v = dde.metrics.l2_relative_error(v_exact, v_pred)
         l2_difference_p = dde.metrics.l2_relative_error(p_exact, p_pred)
-        print(legend)
-        print("L2 relative error in u, v, p: {:.3f} & {:.3f} & {:.3f}"
-              .format(l2_difference_u, l2_difference_v, l2_difference_p))
         top_k = 10
         error_u = np.abs(u_exact - u_pred).reshape(-1)
         error_v = np.abs(v_exact - v_pred).reshape(-1)
@@ -232,7 +229,8 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
         error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
         error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
-        print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
+        print("{:} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f}\\\\"
+              .format(legend, l2_difference_u, l2_difference_v, l2_difference_p, error_u, error_v, error_p))
 
 
 warnings.filterwarnings("ignore")
@@ -318,7 +316,7 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+        resampler = dde.callbacks.PDELossAccumulativeResampler(
             sample_every=(epochs // (resample_times + 1) + 1) // 3,
             sample_num_domain=int(num_train_samples_domain * resample_ratio),
             sample_num_boundary=int(num_train_samples_boundary * resample_ratio),

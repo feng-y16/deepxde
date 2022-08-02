@@ -137,15 +137,11 @@ def test_nn(test_models=None, draw_annealing=False):
     plot_index = 0
     for legend, test_model in test_models.items():
         y_pred = test_model.predict(x.reshape(-1, 1))
-        pde_pred = test_model.predict(x.reshape(-1, 1), operator=ode_system)
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
-        print(legend)
-        print("Mean residual:", np.mean(np.absolute(pde_pred)))
-        print("L2 relative error: {:.3f}".format(l2_difference_u))
         top_k = 10
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
-        print("Top {:} error: {:.3f}".format(top_k, error))
+        print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
         if not draw_annealing and legend.split("_")[0][-2:] == "-A":
             continue
         ax = plt.subplot(gs[0, plot_index])
@@ -232,7 +228,7 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, metrics=["l2 relative error"], loss_weights=loss_weights)
     callbacks = []
     if resample:
-        resampler = dde.callbacks.PDEGradientAccumulativeResampler(
+        resampler = dde.callbacks.PDELossAccumulativeResampler(
             sample_every=(epochs // (resample_times + 1) + 1) // 3,
             sample_num_domain=int(num_train_samples_domain * resample_ratio),
             sample_num_boundary=0,
