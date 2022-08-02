@@ -18,8 +18,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
     parser.add_argument("--num-train-samples-domain", type=int, default=2000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=400)
-    parser.add_argument("--num-train-samples-initial", type=int, default=400)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=200)
+    parser.add_argument("--num-train-samples-initial", type=int, default=200)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
     parser.add_argument("--resample-splits", type=int, default=2)
@@ -118,7 +118,8 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, re
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
     if resampled_points is not None:
-        ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker='X', s=10, color='black')
+        # ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker='X', s=10, color='black')
+        pass
 
 
 def test_nn(times=None, test_models=None, draw_annealing=False):
@@ -229,8 +230,9 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
         error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
         error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
-        print("{:} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f}\\\\"
-              .format(legend, l2_difference_u, l2_difference_v, l2_difference_p, error_u, error_v, error_p))
+        print("{:} & {:} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f}\\\\"
+              .format(legend.split("_")[1], legend.split("_")[0], l2_difference_u, l2_difference_v, l2_difference_p,
+                      error_u, error_v, error_p))
 
 
 warnings.filterwarnings("ignore")
