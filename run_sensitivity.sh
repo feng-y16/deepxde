@@ -12,8 +12,8 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 bash clean.sh "$exp_name"
-num_train_samples_domain=5000
-num_train_samples_boundary=1000
+num_train_samples_domain=3000
+num_train_samples_boundary=600
 data_multipliers=(1 2 4)
 sigmas=(0.05 0.1 0.2)
 for data_multiplier in "${data_multipliers[@]}"; do

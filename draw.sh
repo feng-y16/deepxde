@@ -15,7 +15,7 @@ if [ "$exp_name" == "navier_stokes" ]; then
   res=(10 100)
   for re in "${res[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --load PINN_"$re".0 PINN-A_"$re".0 AT_"$re".0 AT-A_"$re".0 LWIS_"$re".0 LWIS-A_"$re".0 --re "$re" \
+    --load PINN_"$re".0 AT_"$re".0 LWIS_"$re".0 PINN-A_"$re".0 AT-A_"$re".0 LWIS-A_"$re".0 --re "$re" \
     &> experiments/"$exp_name"/draw_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
@@ -26,15 +26,12 @@ elif [ "$exp_name" == "schrodinger" ]; then
   draw_load=()
   for data_multiplier in "${data_multipliers[@]}"; do
     current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
-    draw_load=("${draw_load[@]}" "PINN_${current_num_train_samples_domain}" \
-    "PINN-A_${current_num_train_samples_domain}" "AT_${current_num_train_samples_domain}" \
-    "AT-A_${current_num_train_samples_domain}")
+    draw_load=("${draw_load[@]}" "PINN_${current_num_train_samples_domain}" "AT_${current_num_train_samples_domain}")
   done
   for data_multiplier in "${data_multipliers[@]}"; do
     current_num_train_samples_domain=$((data_multiplier*num_train_samples_domain))
     for sigma in "${sigmas[@]}"; do
-      draw_load=("${draw_load[@]}" "LWIS_${current_num_train_samples_domain}_${sigma}" \
-      "LWIS-A_${current_num_train_samples_domain}_${sigma}")
+      draw_load=("${draw_load[@]}" "LWIS_${current_num_train_samples_domain}_${sigma}")
     done
   done
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
@@ -42,6 +39,6 @@ elif [ "$exp_name" == "schrodinger" ]; then
   GPU_index=$(((GPU_index+1)%num_GPUs))
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --load PINN PINN-A AT AT-A LWIS LWIS-A &> experiments/"$exp_name"/draw.txt &
+  --load PINN AT LWIS PINN-A AT-A LWIS-A &> experiments/"$exp_name"/draw.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
