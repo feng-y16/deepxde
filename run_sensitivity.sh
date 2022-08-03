@@ -12,8 +12,8 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 bash clean.sh "$exp_name"
-num_train_samples_domain=3000
-num_train_samples_boundary=600
+num_train_samples_domain=5000
+num_train_samples_boundary=500
 data_multipliers=(1 2 4)
 sigmas=(0.05 0.1 0.2)
 for data_multiplier in "${data_multipliers[@]}"; do
@@ -53,16 +53,16 @@ for data_multiplier in "${data_multipliers[@]}"; do
     --sigma "${sigma}" --resample &> experiments/"$exp_name"/LWIS_"${current_num_train_samples_domain}"_"${sigma}".txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
+  set +e
+  num_jobs=$(jobs | grep -c "")
+  while [ "$num_jobs" -ge 1 ]
+  do
+    num_jobs=$(jobs | grep -c "Run")
+    echo "$exp_name" "$num_jobs" "jobs remaining"
+    sleep 2
+  done
+  set -e
 done
-set +e
-num_jobs=$(jobs | grep -c "")
-while [ "$num_jobs" -ge 1 ]
-do
-  num_jobs=$(jobs | grep -c "Run")
-  echo "$exp_name" "$num_jobs" "jobs remaining"
-  sleep 2
-done
-set -e
 ./draw.sh "$exp_name" &
 set +e
 num_jobs=$(jobs | grep -c "")

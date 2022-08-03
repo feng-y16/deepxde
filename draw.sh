@@ -20,7 +20,7 @@ if [ "$exp_name" == "navier_stokes" ]; then
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=3000
+  num_train_samples_domain=5000
   data_multipliers=(1 2 4)
   sigmas=(0.05 0.1 0.2)
   draw_load=()
