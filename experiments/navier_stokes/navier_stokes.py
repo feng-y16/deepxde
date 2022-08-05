@@ -148,7 +148,7 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         p_exact = exact_data[time]["p"].reshape(-1)
         p_exact -= p_exact.mean()
         num_results = len(test_models)
-        if not draw_annealing:
+        if not draw_annealing and num_results % 2 == 0:
             num_results //= 2
         num_results += 1
         plt.figure(figsize=(12, 3 * num_results))

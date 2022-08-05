@@ -765,7 +765,7 @@ class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
-                 sample_num_initial=0, sigma=1, top_k=1000, sample_splits=2):
+                 sample_num_initial=0, sigma=1, top_k=100, sample_splits=2):
         super().__init__()
         self.sample_every = sample_every
         self.sample_times = sample_times

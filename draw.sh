@@ -15,12 +15,11 @@ if [ "$exp_name" == "navier_stokes" ]; then
   res=(10 100)
   for re in "${res[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --load PINN_"$re".0 AT_"$re".0 LWIS_"$re".0 PINN-A_"$re".0 AT-A_"$re".0 LWIS-A_"$re".0 --re "$re" \
-    &> experiments/"$exp_name"/draw_"$re".0.txt &
+    --load PINN_"$re".0 AT_"$re".0 LWIS_"$re".0 --re "$re" &> experiments/"$exp_name"/draw_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 elif [ "$exp_name" == "schrodinger" ]; then
-  num_train_samples_domain=5000
+  num_train_samples_domain=2000
   data_multipliers=(1 2 4)
   sigmas=(0.05 0.1 0.2)
   draw_load=()

@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100])
     parser.add_argument("--load", nargs='+', default=[])
-    parser.add_argument("--dimension", type=int, default=10)
+    parser.add_argument("--dimension", type=int, default=6)
     parser.add_argument("--sigma", type=float, default=0.1)
     return parser.parse_known_args()[0]
 
