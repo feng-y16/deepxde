@@ -175,9 +175,9 @@ print(datetime.datetime.now())
 tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
 if args.sensitivity:
-    args.args.num_train_samples_domain *= 2
-    args.args.num_train_samples_boundary *= 2
-    args.args.num_train_samples_initial *= 2
+    args.num_train_samples_domain *= 2
+    args.num_train_samples_boundary *= 2
+    args.num_train_samples_initial *= 2
 print(args)
 resample = args.resample
 adversarial = args.adversarial
