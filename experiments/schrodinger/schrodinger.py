@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--load", nargs='+', default=[])
     parser.add_argument("--dimension", type=int, default=6)
     parser.add_argument("--sigma", type=float, default=0.1)
+    parser.add_argument("--sensitivity", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
 
@@ -88,7 +89,7 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def test_nn(test_models=None, losses=None):
+def test_nn_sensitivity(test_models=None, losses=None):
     if test_models is None:
         test_models = {}
     if losses is None:
@@ -111,68 +112,62 @@ def test_nn(test_models=None, losses=None):
             model_top_k_errors[parsed_legend[0]] = dict()
             model_losses[parsed_legend[0]] = dict()
         if parsed_legend[0] != "LWIS" and parsed_legend[0] != "LWIS-A":
-            num_samples = int(parsed_legend[1])
-            model_errors[parsed_legend[0]][num_samples] = l2_difference_u
-            model_top_k_errors[parsed_legend[0]][num_samples] = error
-            model_losses[parsed_legend[0]][num_samples] = losses[legend]
+            model_errors[parsed_legend[0]] = l2_difference_u
+            model_top_k_errors[parsed_legend[0]] = error
+            model_losses[parsed_legend[0]] = losses[legend]
         else:
-            num_samples = int(parsed_legend[1])
+            num_splits = int(parsed_legend[1])
             LWIS_sigma = float(parsed_legend[2])
             if LWIS_sigma not in model_errors[parsed_legend[0]].keys():
                 model_errors[parsed_legend[0]][LWIS_sigma] = dict()
                 model_top_k_errors[parsed_legend[0]][LWIS_sigma] = dict()
-            model_errors[parsed_legend[0]][LWIS_sigma][num_samples] = l2_difference_u
-            model_top_k_errors[parsed_legend[0]][LWIS_sigma][num_samples] = error
-            if num_samples not in model_losses[parsed_legend[0]].keys():
-                model_losses[parsed_legend[0]][num_samples] = dict()
-            model_losses[parsed_legend[0]][num_samples][LWIS_sigma] = losses[legend]
+            model_errors[parsed_legend[0]][LWIS_sigma][num_splits] = l2_difference_u
+            model_top_k_errors[parsed_legend[0]][LWIS_sigma][num_splits] = error
+            if num_splits not in model_losses[parsed_legend[0]].keys():
+                model_losses[parsed_legend[0]][num_splits] = dict()
+            model_losses[parsed_legend[0]][num_splits][LWIS_sigma] = losses[legend]
     plt.figure(figsize=(12, 4))
     gs = GridSpec(1, 2)
     ax1 = plt.subplot(gs[0, 0])
     ax2 = plt.subplot(gs[0, 1])
     for prefix in model_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
-            ax1.semilogx(list(model_errors[prefix].keys()), list(model_errors[prefix].values()),
-                         marker="o", label=prefix, linewidth=3)
+            pass
         else:
             for LWIS_sigma, LWIS_error in model_errors[prefix].items():
                 ax1.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                              label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    ax1.set_xlabel("Number of Training Samples")
+    ax1.set_xlabel("Number of Splits")
     ax1.set_ylabel(r"$l_2$ Relative Error")
     ax1.legend(loc="best")
     for prefix in model_top_k_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
-            ax2.semilogx(list(model_top_k_errors[prefix].keys()), list(model_top_k_errors[prefix].values()),
-                         marker="o", label=prefix, linewidth=3)
+            pass
         else:
             for LWIS_sigma, LWIS_top_k_error in model_top_k_errors[prefix].items():
                 ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
                              label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    ax2.set_xlabel("Number of Training Samples")
+    ax2.set_xlabel("Number of Splits")
     ax2.set_ylabel("Top {:} Error".format(top_k))
     ax2.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
     plt.savefig(os.path.join(save_dir, "sensitivity.png"))
     plt.close()
     plt.figure(figsize=(6, 4))
-    gs = GridSpec(1, 1)
-    ax = plt.subplot(gs[0, 0])
-    num_samples_for_loss = model_losses["PINN"].__iter__().__next__()
-    for prefix in model_losses.keys():
-        if prefix != "LWIS" and prefix != "LWIS-A":
-            model_loss = model_losses[prefix][num_samples_for_loss]
-            ax.semilogy(epochs // 20 * np.arange(len(model_loss)), model_loss, marker="o", label=prefix, linewidth=3)
-        else:
-            for LWIS_sigma, LWIS_loss in model_losses[prefix][num_samples_for_loss].items():
-                ax.semilogy(epochs // 20 * np.arange(len(LWIS_loss)), LWIS_loss, marker="o",
-                            label=r"{:}-$\sigma={:.2f}$".format(prefix, LWIS_sigma), linewidth=3)
-    ax.set_xlabel("Epochs")
-    ax.set_ylabel("Testing Loss")
-    ax.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "loss_all.pdf"))
-    plt.savefig(os.path.join(save_dir, "loss_all.png"))
-    plt.close()
+
+
+def test_nn(test_models=None):
+    if test_models is None:
+        test_models = {}
+    X = test_models[list(test_models.keys())[0]].data.test_x
+    y_exact = func(X)
+    for legend, test_model in test_models.items():
+        y_pred = test_model.predict(X)
+        l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
+        top_k = 10
+        error = np.abs(y_exact - y_pred).reshape(-1)
+        error = error[np.argpartition(-error, top_k)[: top_k]].mean()
+        print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
 
 
 warnings.filterwarnings("ignore")
@@ -203,11 +198,9 @@ else:
     prefix = "PINN"
 if annealing:
     prefix += "-A"
-if prefix[:4] == "LWIS":
-    prefix += "_{:}_{:}".format(num_train_samples_domain, sigma)
-else:
-    prefix += "_{:}".format(num_train_samples_domain)
-print("resample:", resample)
+if prefix[:4] == "LWIS" and args.sensitivity:
+    prefix += "_{:}_{:}".format(resample_splits, sigma)
+print("resample:", resample, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -303,5 +296,8 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    test_nn(test_models=models, losses=losses_test)
+    if args.sensitivity:
+        test_nn_sensitivity(test_models=models, losses=losses_test)
+    else:
+        test_nn(test_models=models)
     print("draw complete", file=sys.stderr)

@@ -40,9 +40,6 @@ if [ "$exp_name" == "navier_stokes" ]; then
     --re "$re" --resample &> experiments/"$exp_name"/LWIS_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
-elif [ "$exp_name" == "schrodinger" ]; then
-  ./run_sensitivity.sh &
-  exit 0
 else
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   &> experiments/"$exp_name"/PINN.txt &

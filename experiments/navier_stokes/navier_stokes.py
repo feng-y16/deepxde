@@ -264,7 +264,7 @@ else:
 if annealing:
     prefix += "-A"
 prefix += "_{:}".format(Re)
-print("resample:", resample)
+print("resample:", resample, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
