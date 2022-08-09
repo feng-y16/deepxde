@@ -118,7 +118,7 @@ def test_nn_sensitivity(test_models=None, losses=None):
             pass
         else:
             for LWIS_sigma, LWIS_error in model_errors[prefix].items():
-                ax1.semilogx(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
+                ax1.plot(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
                              label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax1.set_xlabel("Number of Splits")
     ax1.set_ylabel(r"$l_2$ Relative Error")
@@ -128,7 +128,7 @@ def test_nn_sensitivity(test_models=None, losses=None):
             pass
         else:
             for LWIS_sigma, LWIS_top_k_error in model_top_k_errors[prefix].items():
-                ax2.semilogx(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
+                ax2.plot(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
                              label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
     ax2.set_xlabel("Number of Splits")
     ax2.set_ylabel("Top {:} Error".format(top_k))
@@ -191,6 +191,10 @@ warnings.filterwarnings("ignore")
 print(datetime.datetime.now())
 tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
+if args.sensitivity:
+    args.args.num_train_samples_domain *= 2
+    args.args.num_train_samples_boundary *= 2
+    args.args.num_train_samples_initial *= 2
 print(args)
 resample = args.resample
 adversarial = args.adversarial
