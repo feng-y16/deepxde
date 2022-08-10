@@ -11,9 +11,8 @@ if [ "$num_GPUs" -eq 0 ]; then
   echo "No enough GPU memory"
   exit 0
 fi
-bash clean.sh "$exp_name"
 resample_splits=(1 2 4)
-sigmas=(0.05 0.1 0.2)
+sigmas=(0.01 0.1 1.0)
 for resample_split in "${resample_splits[@]}"; do
   for sigma in "${sigmas[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \

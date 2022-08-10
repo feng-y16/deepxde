@@ -12,7 +12,7 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 resample_splits=(1 2 4)
-sigmas=(0.05 0.1 0.2)
+sigmas=(0.01 0.1 1.0)
 draw_load=()
 for resample_split in "${resample_splits[@]}"; do
   for sigma in "${sigmas[@]}"; do

@@ -30,7 +30,13 @@ if [ "$exp_name" == "navier_stokes" ]; then
     --num-train-samples-domain $num_train_samples_domain \
     --num-train-samples-boundary $num_train_samples_boundary \
     --num-train-samples-initial $num_train_samples_initial \
-    --re "$re" --adversarial &> experiments/"$exp_name"/AT_"$re".0.txt &
+    --re "$re" --resample --domain-only &> experiments/"$exp_name"/LWIS-D_"$re".0.txt &
+    GPU_index=$(((GPU_index+1)%num_GPUs))
+    CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
+    --num-train-samples-domain $num_train_samples_domain \
+    --num-train-samples-boundary $num_train_samples_boundary \
+    --num-train-samples-initial $num_train_samples_initial \
+    --re "$re" --resample --boundary-only &> experiments/"$exp_name"/LWIS-B_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
     --num-train-samples-domain $num_train_samples_domain \
@@ -44,19 +50,13 @@ else
   &> experiments/"$exp_name"/PINN.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --annealing &> experiments/"$exp_name"/PINN-A.txt &
+  --resample --domain-only &> experiments/"$exp_name"/LWIS-D.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --adversarial &> experiments/"$exp_name"/AT.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --adversarial --annealing &> experiments/"$exp_name"/AT-A.txt &
+  --resample --boundary-only &> experiments/"$exp_name"/LWIS-B.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
   --resample &> experiments/"$exp_name"/LWIS.txt &
-  GPU_index=$(((GPU_index+1)%num_GPUs))
-  CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample --annealing &> experiments/"$exp_name"/LWIS-A.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
 set +e
@@ -68,7 +68,7 @@ do
   sleep 2
 done
 set -e
-./draw.sh "$exp_name" &
+./draw_ablation.sh "$exp_name" &
 set +e
 num_jobs=$(jobs | grep -c "")
 while [ "$num_jobs" -ge 1 ]

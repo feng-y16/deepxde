@@ -16,8 +16,8 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=3000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=600)
+    parser.add_argument("--num-train-samples-domain", type=int, default=4000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=200)
     parser.add_argument("--num-train-samples-initial", type=int, default=0)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100])
     parser.add_argument("--load", nargs='+', default=[])
-    parser.add_argument("--dimension", type=int, default=6)
+    parser.add_argument("--dimension", type=int, default=10)
     parser.add_argument("--sigma", type=float, default=0.1)
     parser.add_argument("--sensitivity", action="store_true", default=False)
     return parser.parse_known_args()[0]
@@ -126,34 +126,78 @@ def test_nn_sensitivity(test_models=None, losses=None):
             if num_splits not in model_losses[parsed_legend[0]].keys():
                 model_losses[parsed_legend[0]][num_splits] = dict()
             model_losses[parsed_legend[0]][num_splits][LWIS_sigma] = losses[legend]
-    plt.figure(figsize=(12, 4))
-    gs = GridSpec(1, 2)
+    plt.figure(figsize=(6, 5))
+    gs = GridSpec(1, 1)
     ax1 = plt.subplot(gs[0, 0])
-    ax2 = plt.subplot(gs[0, 1])
     for prefix in model_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
             pass
         else:
-            for LWIS_sigma, LWIS_error in model_errors[prefix].items():
-                ax1.plot(list(LWIS_error.keys()), list(LWIS_error.values()), marker="o",
-                             label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    ax1.set_xlabel("Number of Splits")
-    ax1.set_ylabel(r"$l_2$ Relative Error")
-    ax1.legend(loc="best")
+            sigma_list = list(model_errors[prefix].keys())
+            num_splits_list = list(model_errors[prefix][sigma_list[0]])
+            mesh_x, mesh_y = np.meshgrid(sigma_list, num_splits_list)
+            mesh_z = np.zeros_like(mesh_x)
+            for i, LWIS_sigma in enumerate(sigma_list):
+                for j, LWIS_num_splits in enumerate(num_splits_list):
+                    mesh_z[i, j] = model_errors[prefix][mesh_x[i, j]][mesh_y[i, j]]
+            heatmap = ax1.pcolor(mesh_z)
+            plt.colorbar(heatmap)
+            for i, LWIS_sigma in enumerate(sigma_list):
+                for j, LWIS_num_splits in enumerate(num_splits_list):
+                    plt.text(i + 0.5, j + 0.5, "{:.3f}".format(mesh_z[j, i]), horizontalalignment="center",
+                             verticalalignment="center")
+            x_ticks = [], []
+            for i, LWIS_sigma in enumerate(sigma_list):
+                x_ticks[0].append(i + 0.5)
+                x_ticks[1].append(LWIS_sigma)
+            ax1.set_xticks(*x_ticks)
+            y_ticks = [], []
+            for j, LWIS_num_splits in enumerate(num_splits_list):
+                y_ticks[0].append(j + 0.5)
+                y_ticks[1].append(LWIS_num_splits)
+            ax1.set_yticks(*y_ticks)
+    ax1.set_xlabel(r"$\sigma$")
+    ax1.set_ylabel(r"$K$")
+    ax1.set_title(r"$l_2$ Relative Error")
+    plt.savefig(os.path.join(save_dir, "sensitivity1.pdf"))
+    plt.savefig(os.path.join(save_dir, "sensitivity1.png"))
+    plt.close()
+    plt.figure(figsize=(6, 5))
+    gs = GridSpec(1, 1)
+    ax2 = plt.subplot(gs[0, 0])
     for prefix in model_top_k_errors.keys():
         if prefix != "LWIS" and prefix != "LWIS-A":
             pass
         else:
-            for LWIS_sigma, LWIS_top_k_error in model_top_k_errors[prefix].items():
-                ax2.plot(list(LWIS_top_k_error.keys()), list(LWIS_top_k_error.values()), marker="o",
-                             label=r"LWIS-$\sigma={:.2f}$".format(LWIS_sigma), linewidth=3)
-    ax2.set_xlabel("Number of Splits")
-    ax2.set_ylabel("Top {:} Error".format(top_k))
-    ax2.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "sensitivity.pdf"))
-    plt.savefig(os.path.join(save_dir, "sensitivity.png"))
+            sigma_list = list(model_top_k_errors[prefix].keys())
+            num_splits_list = list(model_top_k_errors[prefix][sigma_list[0]])
+            mesh_x, mesh_y = np.meshgrid(sigma_list, num_splits_list)
+            mesh_z = np.zeros_like(mesh_x)
+            for i, LWIS_sigma in enumerate(sigma_list):
+                for j, LWIS_num_splits in enumerate(num_splits_list):
+                    mesh_z[i, j] = model_top_k_errors[prefix][mesh_x[i, j]][mesh_y[i, j]]
+            heatmap = ax2.pcolor(mesh_z)
+            plt.colorbar(heatmap)
+            for i, LWIS_sigma in enumerate(sigma_list):
+                for j, LWIS_num_splits in enumerate(num_splits_list):
+                    plt.text(i + 0.5, j + 0.5, "{:.3f}".format(mesh_z[j, i]), horizontalalignment="center",
+                             verticalalignment="center")
+            x_ticks = [], []
+            for i, LWIS_sigma in enumerate(sigma_list):
+                x_ticks[0].append(i + 0.5)
+                x_ticks[1].append(LWIS_sigma)
+            ax2.set_xticks(*x_ticks)
+            y_ticks = [], []
+            for j, LWIS_num_splits in enumerate(num_splits_list):
+                y_ticks[0].append(j + 0.5)
+                y_ticks[1].append(LWIS_num_splits)
+            ax2.set_yticks(*y_ticks)
+    ax2.set_xlabel(r"$\sigma$")
+    ax2.set_ylabel(r"$K$")
+    ax2.set_title("Top {:} Error".format(top_k))
+    plt.savefig(os.path.join(save_dir, "sensitivity2.pdf"))
+    plt.savefig(os.path.join(save_dir, "sensitivity2.png"))
     plt.close()
-    plt.figure(figsize=(6, 4))
 
 
 def test_nn(test_models=None):
@@ -174,14 +218,11 @@ warnings.filterwarnings("ignore")
 print(datetime.datetime.now())
 tf.config.threading.set_inter_op_parallelism_threads(1)
 args = parse_args()
-if args.sensitivity:
-    args.num_train_samples_domain *= 2
-    args.num_train_samples_boundary *= 2
-    args.num_train_samples_initial *= 2
 print(args)
 resample = args.resample
 adversarial = args.adversarial
 annealing = args.annealing
+sensitivity = args.sensitivity
 loss_weights = args.loss_weights
 resample_times = args.resample_times
 resample_ratio = args.resample_ratio
@@ -202,7 +243,7 @@ else:
     prefix = "PINN"
 if annealing:
     prefix += "-A"
-if prefix[:4] == "LWIS" and args.sensitivity:
+if prefix[:4] == "LWIS" and sensitivity:
     prefix += "_{:}_{:}".format(resample_splits, sigma)
 print("resample:", resample, resample_splits)
 print("adversarial:", adversarial)
@@ -300,7 +341,7 @@ else:
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
-    if args.sensitivity:
+    if sensitivity:
         test_nn_sensitivity(test_models=models, losses=losses_test)
     else:
         test_nn(test_models=models)
