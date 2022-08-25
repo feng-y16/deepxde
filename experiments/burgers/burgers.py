@@ -329,10 +329,10 @@ if len(load) == 0:
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
-            sample_every=(epochs // (resample_times + 1) + 1) // 3,
-            sample_num_domain=int(num_train_samples_domain * resample_ratio),
-            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
-            sample_num_initial=int(num_train_samples_initial * resample_ratio),
+            sample_every=epochs // resample_times,
+            sample_num_domain=num_train_samples_domain,
+            sample_num_boundary=num_train_samples_boundary,
+            sample_num_initial=num_train_samples_initial,
             sample_times=resample_times, eta=0.01)
         callbacks.append(resampler)
     if annealing:

@@ -227,6 +227,28 @@ class PDE(Data):
             X = np.array(list(filter(is_not_excluded, X)))
         return X
 
+    def replace_train_points(self, domain_x, boundary_x, initial_x):
+        self.train_x_all = np.vstack((initial_x, boundary_x, domain_x))
+        self.num_domain = len(domain_x)
+        self.num_boundary = len(boundary_x)
+        self.num_initial = len(initial_x)
+        x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
+        self.num_bcs = list(map(len, x_bcs))
+        self.train_x_bc = (
+            np.vstack(x_bcs)
+            if x_bcs
+            else np.empty([0, self.train_x_all.shape[-1]], dtype=config.real(np))
+        )
+        self.train_x = self.train_x_bc.copy()
+        if self.pde is not None:
+            self.train_x = np.vstack((self.train_x, self.train_x_all))
+        self.train_y = self.soln(self.train_x) if self.soln else None
+        if self.auxiliary_var_fn is not None:
+            self.train_aux_vars = self.auxiliary_var_fn(self.train_x).astype(
+                config.real(np)
+            )
+        return self.train_x_all
+
     def add_train_points(self, sample_prob, sample_num, boundary=False, initial=False, train_x=None):
         if boundary:
             if train_x is None:
