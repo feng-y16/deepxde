@@ -228,10 +228,14 @@ class PDE(Data):
         return X
 
     def replace_train_points(self, domain_x, boundary_x, initial_x):
-        self.train_x_all = np.vstack((initial_x, boundary_x, domain_x))
+        self.train_x_all = domain_x
         self.num_domain = len(domain_x)
-        self.num_boundary = len(boundary_x)
-        self.num_initial = len(initial_x)
+        if boundary_x is not None:
+            self.train_x_all = np.vstack((boundary_x, self.train_x_all))
+            self.num_boundary = len(boundary_x)
+        if initial_x is not None:
+            self.train_x_all = np.vstack((initial_x, self.train_x_all))
+            self.num_initial = len(initial_x)
         x_bcs = [bc.collocation_points(self.train_x_all) for bc in self.bcs]
         self.num_bcs = list(map(len, x_bcs))
         self.train_x_bc = (
