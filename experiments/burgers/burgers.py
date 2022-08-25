@@ -16,9 +16,9 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=3000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=150)
-    parser.add_argument("--num-train-samples-initial", type=int, default=150)
+    parser.add_argument("--num-train-samples-domain", type=int, default=2000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=100)
+    parser.add_argument("--num-train-samples-initial", type=int, default=100)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
     parser.add_argument("--resample-splits", type=int, default=2)

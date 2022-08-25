@@ -17,7 +17,7 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=20)
+    parser.add_argument("--num-train-samples-domain", type=int, default=10)
     parser.add_argument("--num-train-samples-boundary", type=int, default=0)
     parser.add_argument("--num-train-samples-initial", type=int, default=2)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
@@ -240,7 +240,7 @@ if len(load) == 0:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
             sample_every=epochs // resample_times,
             sample_num_domain=num_train_samples_domain,
-            sample_num_boundary=0,
+            sample_num_boundary=num_train_samples_initial * resample_times,
             sample_num_initial=0,
             sample_times=resample_times,
             eta=0.01)

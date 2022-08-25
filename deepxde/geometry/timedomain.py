@@ -15,6 +15,10 @@ class TimeDomain(Interval):
     def on_initial(self, t):
         return np.isclose(t, self.t0).flatten()
 
+    def random_initial_points(self, n, random="pseudo"):
+        t = self.t0
+        return t * np.ones((1, n), dtype=config.real(np))
+
 
 class GeometryXTime:
     def __init__(self, geometry, timedomain):
