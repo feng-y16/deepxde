@@ -28,7 +28,6 @@ def parse_args():
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100])
     parser.add_argument("--load", nargs='+', default=[])
     parser.add_argument("--dimension", type=int, default=10)
-    parser.add_argument("--sigma", type=float, default=0.1)
     parser.add_argument("--sensitivity", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
@@ -107,94 +106,30 @@ def test_nn_sensitivity(test_models=None, losses=None):
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
         print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
         parsed_legend = legend.split("_")
-        if parsed_legend[0] not in model_errors.keys():
-            model_errors[parsed_legend[0]] = dict()
-            model_top_k_errors[parsed_legend[0]] = dict()
-            model_losses[parsed_legend[0]] = dict()
-        if parsed_legend[0] != "LWIS" and parsed_legend[0] != "LWIS-A":
-            model_errors[parsed_legend[0]] = l2_difference_u
-            model_top_k_errors[parsed_legend[0]] = error
-            model_losses[parsed_legend[0]] = losses[legend]
+        if parsed_legend[0] != "LWIS":
+            continue
         else:
             num_splits = int(parsed_legend[1])
-            LWIS_sigma = float(parsed_legend[2])
-            if LWIS_sigma not in model_errors[parsed_legend[0]].keys():
-                model_errors[parsed_legend[0]][LWIS_sigma] = dict()
-                model_top_k_errors[parsed_legend[0]][LWIS_sigma] = dict()
-            model_errors[parsed_legend[0]][LWIS_sigma][num_splits] = l2_difference_u
-            model_top_k_errors[parsed_legend[0]][LWIS_sigma][num_splits] = error
-            if num_splits not in model_losses[parsed_legend[0]].keys():
-                model_losses[parsed_legend[0]][num_splits] = dict()
-            model_losses[parsed_legend[0]][num_splits][LWIS_sigma] = losses[legend]
+            model_errors[num_splits] = l2_difference_u
+            model_top_k_errors[num_splits] = error
+            model_losses[num_splits] = losses[legend]
     plt.figure(figsize=(6, 5))
     gs = GridSpec(1, 1)
     ax1 = plt.subplot(gs[0, 0])
-    for prefix in model_errors.keys():
-        if prefix != "LWIS" and prefix != "LWIS-A":
-            pass
-        else:
-            sigma_list = list(model_errors[prefix].keys())
-            num_splits_list = list(model_errors[prefix][sigma_list[0]])
-            mesh_x, mesh_y = np.meshgrid(sigma_list, num_splits_list)
-            mesh_z = np.zeros_like(mesh_x)
-            for i, LWIS_sigma in enumerate(sigma_list):
-                for j, LWIS_num_splits in enumerate(num_splits_list):
-                    mesh_z[i, j] = model_errors[prefix][mesh_x[i, j]][mesh_y[i, j]]
-            heatmap = ax1.pcolor(mesh_z)
-            plt.colorbar(heatmap)
-            for i, LWIS_sigma in enumerate(sigma_list):
-                for j, LWIS_num_splits in enumerate(num_splits_list):
-                    plt.text(i + 0.5, j + 0.5, "{:.3f}".format(mesh_z[j, i]), horizontalalignment="center",
-                             verticalalignment="center")
-            x_ticks = [], []
-            for i, LWIS_sigma in enumerate(sigma_list):
-                x_ticks[0].append(i + 0.5)
-                x_ticks[1].append(LWIS_sigma)
-            ax1.set_xticks(*x_ticks)
-            y_ticks = [], []
-            for j, LWIS_num_splits in enumerate(num_splits_list):
-                y_ticks[0].append(j + 0.5)
-                y_ticks[1].append(LWIS_num_splits)
-            ax1.set_yticks(*y_ticks)
-    ax1.set_xlabel(r"$\sigma$")
-    ax1.set_ylabel(r"$K$")
-    ax1.set_title(r"$l_2$ Relative Error")
+    ax1.bar(model_errors.keys(), model_errors.values())
+    ax1.bar([str(key) for key in model_errors.keys()], model_errors.values())
+    ax1.set_xlabel(r"$K$")
+    ax1.set_ylabel(r"$l_2$ Relative Error")
     plt.savefig(os.path.join(save_dir, "sensitivity1.pdf"))
     plt.savefig(os.path.join(save_dir, "sensitivity1.png"))
     plt.close()
     plt.figure(figsize=(6, 5))
     gs = GridSpec(1, 1)
     ax2 = plt.subplot(gs[0, 0])
-    for prefix in model_top_k_errors.keys():
-        if prefix != "LWIS" and prefix != "LWIS-A":
-            pass
-        else:
-            sigma_list = list(model_top_k_errors[prefix].keys())
-            num_splits_list = list(model_top_k_errors[prefix][sigma_list[0]])
-            mesh_x, mesh_y = np.meshgrid(sigma_list, num_splits_list)
-            mesh_z = np.zeros_like(mesh_x)
-            for i, LWIS_sigma in enumerate(sigma_list):
-                for j, LWIS_num_splits in enumerate(num_splits_list):
-                    mesh_z[i, j] = model_top_k_errors[prefix][mesh_x[i, j]][mesh_y[i, j]]
-            heatmap = ax2.pcolor(mesh_z)
-            plt.colorbar(heatmap)
-            for i, LWIS_sigma in enumerate(sigma_list):
-                for j, LWIS_num_splits in enumerate(num_splits_list):
-                    plt.text(i + 0.5, j + 0.5, "{:.3f}".format(mesh_z[j, i]), horizontalalignment="center",
-                             verticalalignment="center")
-            x_ticks = [], []
-            for i, LWIS_sigma in enumerate(sigma_list):
-                x_ticks[0].append(i + 0.5)
-                x_ticks[1].append(LWIS_sigma)
-            ax2.set_xticks(*x_ticks)
-            y_ticks = [], []
-            for j, LWIS_num_splits in enumerate(num_splits_list):
-                y_ticks[0].append(j + 0.5)
-                y_ticks[1].append(LWIS_num_splits)
-            ax2.set_yticks(*y_ticks)
-    ax2.set_xlabel(r"$\sigma$")
-    ax2.set_ylabel(r"$K$")
-    ax2.set_title("Top {:} Error".format(top_k))
+    ax2.bar(model_top_k_errors.keys(), model_top_k_errors.values())
+    ax2.bar([str(key) for key in model_top_k_errors.keys()], model_top_k_errors.values())
+    ax2.set_xlabel(r"$K$")
+    ax2.set_ylabel("Top {:} Error".format(top_k))
     plt.savefig(os.path.join(save_dir, "sensitivity2.pdf"))
     plt.savefig(os.path.join(save_dir, "sensitivity2.png"))
     plt.close()
@@ -234,7 +169,6 @@ num_train_samples_initial = args.num_train_samples_initial
 load = args.load
 save_dir = os.path.dirname(os.path.abspath(__file__))
 d = args.dimension
-sigma = args.sigma
 if resample:
     prefix = "LWIS"
 elif adversarial:
@@ -244,7 +178,7 @@ else:
 if annealing:
     prefix += "-A"
 if prefix[:4] == "LWIS" and sensitivity:
-    prefix += "_{:}_{:}".format(resample_splits, sigma)
+    prefix += "_{:}".format(resample_splits)
 print("resample:", resample, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
@@ -293,7 +227,7 @@ if len(load) == 0:
             sample_num_domain=int(num_train_samples_domain * resample_ratio),
             sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
             sample_num_initial=int(num_train_samples_initial * resample_ratio),
-            sample_times=resample_times, sigma=sigma,
+            sample_times=resample_times,
             sample_splits=resample_splits)
         callbacks.append(resampler)
     elif adversarial:
@@ -302,7 +236,8 @@ if len(load) == 0:
             sample_num_domain=num_train_samples_domain,
             sample_num_boundary=num_train_samples_boundary,
             sample_num_initial=num_train_samples_initial,
-            sample_times=resample_times, eta=0.01)
+            sample_times=resample_times,
+            eta=0.01)
         callbacks.append(resampler)
     if annealing:
         resampler = dde.callbacks.PDELearningRateAnnealing(adjust_every=epochs // 20, loss_weights=loss_weights)

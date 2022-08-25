@@ -12,12 +12,9 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 resample_splits=(1 2 4)
-sigmas=(0.01 0.1 1.0)
 draw_load=()
 for resample_split in "${resample_splits[@]}"; do
-  for sigma in "${sigmas[@]}"; do
-    draw_load=("${draw_load[@]}" "LWIS_${resample_split}_${sigma}")
-  done
+  draw_load=("${draw_load[@]}" "LWIS_${resample_split}")
 done
 CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
 --load "${draw_load[@]}" --sensitivity &> experiments/"$exp_name"/draw_sensitivity.txt &
