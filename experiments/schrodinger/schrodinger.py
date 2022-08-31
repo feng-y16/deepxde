@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-initial", type=int, default=0)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
-    parser.add_argument("--resample-splits", type=int, default=2)
+    parser.add_argument("--resample-splits", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
@@ -74,17 +74,17 @@ def plot_loss(loss_train, loss_test):
     plt.close()
 
 
-def plot_loss_combined(losses):
+def plot_loss_combined(losses, filename):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        if legend not in ["PINN_10000", "LWIS_10000_0.1"]:
+        if legend[-2:] == "-A":
             continue
-        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
-        ax.set_xlabel("Epochs")
-        ax.set_ylabel("Testing Loss")
-        ax.legend(loc="best")
-    plt.savefig(os.path.join(save_dir, "loss.pdf"))
-    plt.savefig(os.path.join(save_dir, "loss.png"))
+        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Testing Loss")
+    ax.legend(loc="best")
+    plt.savefig(os.path.join(save_dir, "{:}.pdf".format(filename)))
+    plt.savefig(os.path.join(save_dir, "{:}.png".format(filename)))
     plt.close()
 
 
@@ -104,7 +104,7 @@ def test_nn_sensitivity(test_models=None, losses=None):
         l2_difference_u = dde.metrics.l2_relative_error(y_exact, y_pred)
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
-        print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
+        print("    {:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
         parsed_legend = legend.split("_")
         if parsed_legend[0] != "LWIS":
             continue
@@ -176,8 +176,8 @@ else:
 if annealing:
     prefix += "-A"
 if prefix[:4] == "LWIS" and sensitivity:
-    prefix += "_{:}".format(resample_splits)
-print("resample:", resample, resample_splits)
+    prefix += "_{:}".format(resample_times)
+print("resample:", resample, resample_times, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -214,6 +214,9 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
+    if os.path.isfile(os.path.join(save_dir, prefix + "_info.pkl")):
+        print("skipping")
+        exit(0)
     net = dde.nn.FNN([d] + [50] * 5 + [1], "tanh", "Glorot normal")
     model = dde.Model(data, net)
 
@@ -273,9 +276,10 @@ else:
         model.resampled_data = resampled_data
         models[prefix] = model
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
-    plot_loss_combined(losses_test)
     if sensitivity:
+        plot_loss_combined(losses_test, "loss_sensitivity")
         test_nn_sensitivity(test_models=models, losses=losses_test)
     else:
+        plot_loss_combined(losses_test, "loss")
         test_nn(test_models=models)
     print("draw complete", file=sys.stderr)

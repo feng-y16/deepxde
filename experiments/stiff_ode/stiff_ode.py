@@ -66,10 +66,12 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
+        if legend[-2:] == "-A":
+            continue
         ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend, linewidth=3)
-        ax.set_xlabel("Epochs")
-        ax.set_ylabel("Testing Loss")
-        ax.legend(loc="best")
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Testing Loss")
+    ax.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "loss.pdf"))
     plt.savefig(os.path.join(save_dir, "loss.png"))
     plt.close()
@@ -141,7 +143,7 @@ def test_nn(test_models=None, draw_annealing=False):
         top_k = 10
         error = np.abs(y_exact - y_pred).reshape(-1)
         error = error[np.argpartition(-error, top_k)[: top_k]].mean()
-        print("{:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
+        print("    {:} & {:.3f} & {:.3f}\\\\".format(legend, l2_difference_u, error))
         if not draw_annealing and legend.split("_")[0][-2:] == "-A":
             continue
         ax = plt.subplot(gs[0, plot_index])
@@ -192,7 +194,7 @@ else:
     prefix = "PINN"
 if annealing:
     prefix += "-A"
-print("resample:", resample, resample_splits)
+print("resample:", resample, resample_times, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -219,6 +221,9 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
+    if os.path.isfile(os.path.join(save_dir, prefix + "_info.pkl")):
+        print("skipping")
+        exit(0)
     layer_size = [1] + [20] * 3 + [1]
     activation = "tanh"
     initializer = "Glorot uniform"

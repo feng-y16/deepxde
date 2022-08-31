@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-initial", type=int, default=200)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
     parser.add_argument("--resample-times", type=int, default=4)
-    parser.add_argument("--resample-splits", type=int, default=2)
+    parser.add_argument("--resample-splits", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
@@ -96,10 +96,10 @@ def plot_loss(loss_train, loss_test):
 def plot_loss_combined(losses):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
     for legend, loss in losses.items():
-        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend[:4], linewidth=3)
-        ax.set_xlabel("Epochs")
-        ax.set_ylabel("Testing Loss")
-        ax.legend(loc="best")
+        ax.semilogy(epochs // 20 * np.arange(len(loss)), loss, marker='o', label=legend.split("_")[0], linewidth=3)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Testing Loss")
+    ax.legend(loc="best")
     plt.savefig(os.path.join(save_dir, "loss_{}.pdf".format(Re)))
     plt.savefig(os.path.join(save_dir, "loss_{}.png".format(Re)))
     plt.close()
@@ -230,7 +230,7 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         error_u = error_u[np.argpartition(-error_u, top_k)[: top_k]].mean()
         error_v = error_v[np.argpartition(-error_v, top_k)[: top_k]].mean()
         error_p = error_p[np.argpartition(-error_p, top_k)[: top_k]].mean()
-        print("{:} & {:} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f}\\\\"
+        print("    {:} & {:} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f}\\\\"
               .format(legend.split("_")[1], legend.split("_")[0], l2_difference_u, l2_difference_v, l2_difference_p,
                       error_u, error_v, error_p))
 
@@ -264,7 +264,7 @@ else:
 if annealing:
     prefix += "-A"
 prefix += "_{:}".format(Re)
-print("resample:", resample, resample_splits)
+print("resample:", resample, resample_times, resample_splits)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -313,6 +313,9 @@ plt.rcParams.update({"figure.autolayout": True})
 plt.rc("font", size=18)
 models = {}
 if len(load) == 0:
+    if os.path.isfile(os.path.join(save_dir, prefix + "_info.pkl")):
+        print("skipping")
+        exit(0)
     net = dde.nn.FNN([3] + [50] * 5 + [3], "tanh", "Glorot normal")
     model = dde.Model(data, net)
     model.compile("adam", lr=1e-3, loss_weights=loss_weights)

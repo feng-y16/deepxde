@@ -11,10 +11,10 @@ if [ "$num_GPUs" -eq 0 ]; then
   echo "No enough GPU memory"
   exit 0
 fi
-resample_splits=(1 2 4)
+resample_times_list=(1 2 4 8)
 draw_load=()
-for resample_split in "${resample_splits[@]}"; do
-  draw_load=("${draw_load[@]}" "LWIS_${resample_split}")
+for resample_times in "${resample_times_list[@]}"; do
+  draw_load=("${draw_load[@]}" "LWIS_${resample_times}")
 done
 CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
 --load "${draw_load[@]}" --sensitivity &> experiments/"$exp_name"/draw_sensitivity.txt &
