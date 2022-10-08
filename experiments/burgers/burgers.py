@@ -127,6 +127,7 @@ def test_nn(test_models=None, draw_annealing=False):
     num_results = len(test_models)
     if not draw_annealing:
         num_results //= 2
+        num_results = max(num_results, 1)
     num_results += 1
     plt.figure(figsize=(12, 3 * num_results))
     gs = GridSpec(num_results, 1)

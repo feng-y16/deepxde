@@ -27,3 +27,6 @@ dist/
 # Logs
 *.log
 *.txt
+
+# D3rlpy
+d3rlpy_logs/

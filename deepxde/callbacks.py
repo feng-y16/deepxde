@@ -5,6 +5,8 @@ import numpy as np
 import scipy
 import jax.numpy as jnp
 import tensorflow as tf
+from gym import spaces
+import d3rlpy
 
 from . import config
 from . import gradients as grad
@@ -757,26 +759,126 @@ class PDEAdversarialAccumulativeResampler(Callback):
         print("")
 
 
+class RLEnv:
+
+    def __init__(self, model, state_points=100, action_points=10):
+        super(RLEnv, self).__init__()
+        self.model = model
+        self.state_points = state_points
+        self.action_points = action_points
+        geom = self.model.data.geom
+        if hasattr(geom, "timedomain"):
+            x_min = geom.geometry.xmin if hasattr(geom.geometry, "xmin") else np.array([geom.geometry.l])
+            x_max = geom.geometry.xmax if hasattr(geom.geometry, "xmax") else np.array([geom.geometry.r])
+            x_min = np.concatenate((x_min, np.array([geom.timedomain.t0])), axis=0)
+            x_max = np.concatenate((x_max, np.array([geom.timedomain.t1])), axis=0)
+        else:
+            x_min = geom.xmin if hasattr(geom, "xmin") else np.array([geom.l])
+            x_max = geom.xmax if hasattr(geom, "xmax") else np.array([geom.r])
+        self.observation_space = spaces.Box(np.concatenate((x_min, [0])).repeat(state_points),
+                                            np.concatenate((x_max, [np.finfo(np.float32).max])).repeat(state_points))
+        self.action_space = spaces.Box(x_min.repeat(action_points), x_max.repeat(action_points))
+        self.dim_points = len(x_min)
+        x = self.model.data.train_x[-self.state_points:]
+        loss = self.get_loss_domain(x)
+        self.o = np.concatenate((x, loss.reshape(-1, 1)), axis=1).reshape(-1)
+
+    def get_loss_domain(self, x):
+        operator = self.model.data.pde
+        if isinstance(x, tuple):
+            x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
+        else:
+            x = np.asarray(x, dtype=config.real(np))
+
+        if utils.get_num_args(operator) == 2:
+
+            @tf.function
+            def op(inputs):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                return tf.reduce_sum(loss, axis=1)
+        else:
+            assert utils.get_num_args(operator) == 3
+            aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
+
+            @tf.function
+            def op(inputs):
+                y = self.model.net(inputs)
+                outs = operator(inputs, y, aux_vars)
+                loss = None
+                if type(outs) == list:
+                    for out in outs:
+                        if loss is None:
+                            loss = out ** 2
+                        else:
+                            loss += out ** 2
+                else:
+                    loss = outs ** 2
+                return tf.reduce_sum(loss, axis=1)
+        return utils.to_numpy(op(x))
+
+    def get_loss_boundary(self, x):
+        bcs = self.model.data.bcs
+
+        @tf.function
+        def op(inputs, boundary_gts):
+            y = self.model.net(inputs)
+            loss = tf.reduce_sum((y[:, :boundary_gts.shape[-1]] - boundary_gts) ** 2, axis=1, keepdims=True)
+            return tf.reduce_sum(loss, axis=1)
+        boundary_gts = []
+        for bc in bcs:
+            if type(bc) != IC or len(bcs) == 1:
+                boundary_gts.append(bc.original_func(x))
+        boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
+        return utils.to_numpy(op(x, boundary_gts))
+
+    def reset(self, seed=None):
+        if seed is not None:
+            np.random.seed(seed)
+        x = self.model.data.train_x[-self.state_points:]
+        loss = self.get_loss_domain(x)
+        self.o = np.concatenate((x, loss.reshape(-1, 1)), axis=1).reshape(-1)
+        return self.o
+
+    def step(self, a):
+        x = self.model.data.train_x[-self.state_points:]
+        loss = self.get_loss_domain(x)
+        self.o = np.concatenate((x, loss.reshape(-1, 1)), axis=1).reshape(-1)
+        r = self.get_loss_domain(a.reshape(-1, self.dim_points)).mean()
+        d = 0
+        return self.o, r, d, {}
+
+
+
 class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, sample_num_boundary=0,
-                 sample_num_initial=0, sample_splits=1):
+    def __init__(self, sample_every=100, sample_times=4, sample_num_domain=100, **kwargs):
         super().__init__()
         self.sample_every = sample_every
         self.sample_times = sample_times
         self.sample_num = sample_num_domain
         self.sample_num_domain = sample_num_domain // sample_times
-        self.sample_num_boundary = sample_num_boundary // sample_times
-        self.sample_num_initial = sample_num_initial // sample_times
-        self.sample_splits = sample_splits
         self.current_sample_times = 0
         self.epochs_since_last_sample = 0
         self.sampled_train_points = []
         self.num_bcs_initial = None
         self.boundary = False
+        self.rl_env = None
+        self.rl_agent = None
 
     def on_train_begin(self):
+        self.rl_env = RLEnv(self.model, self.model.data.num_domain // 10, self.sample_num_domain)
+        self.rl_agent = d3rlpy.algos.SAC(use_gpu=False)
         self.num_bcs_initial = self.model.data.num_bcs
 
     def get_weights_domain(self, x, operator, loss_weight=1.0):
@@ -843,54 +945,26 @@ class PDELossAccumulativeResampler(Callback):
         return utils.to_numpy(op(x, boundary_gts))
 
     def on_epoch_end(self):
+        self.rl_agent.fit_online(self.rl_env, n_steps=1, n_steps_per_epoch=1, save_interval=1000,
+                                 save_metrics=False, verbose=False, buffer=buffer)
         self.epochs_since_last_sample += 1
         if self.epochs_since_last_sample < self.sample_every or self.current_sample_times == self.sample_times:
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        sampled_points_domain, sampled_points_boundary, sampled_points_initial = None, None, None
-        for i in range(self.sample_splits):
-
-            def sample_prob(sample):
-                prob = self.get_weights_domain(sample, self.model.data.pde)
-                return prob
-            temp = self.model.data.sample_train_points(
-                sample_prob, self.sample_num_domain // self.sample_splits,
-                sampler=self.model.data.geom.random_points)
-            if i == 0:
-                sampled_points_domain = temp
-            else:
-                sampled_points_domain = np.concatenate((sampled_points_domain, temp))
-
-            def sample_prob(sample):
-                prob = self.get_weights_boundary(sample, self.model.data.bcs)
-                return prob
-            if self.sample_num_boundary > 0:
-                temp = self.model.data.sample_train_points(
-                    sample_prob, self.sample_num_boundary // self.sample_splits,
-                    sampler=self.model.data.geom.random_boundary_points)
-                if i == 0:
-                    sampled_points_boundary = temp
-                else:
-                    sampled_points_boundary = np.concatenate((sampled_points_boundary, temp))
-            if self.sample_num_initial > 0:
-                temp = self.model.data.sample_train_points(
-                    sample_prob, self.sample_num_initial // self.sample_splits,
-                    sampler=self.model.data.geom.random_initial_points)
-                if i == 0:
-                    sampled_points_initial = temp
-                else:
-                    sampled_points_initial = np.concatenate((sampled_points_initial, temp))
+        # sampled_points_domain, sampled_points_boundary, sampled_points_initial = None, None, None
+        sampled_points_domain = self.rl_agent.predict(self.rl_env.o.reshape(1, -1))[0]\
+            .reshape(self.sample_num_domain, -1)
         self.model.data.add_train_points(None, None, boundary=False, train_x=sampled_points_domain)
-        if self.sample_num_boundary > 0:
-            self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
-        if self.sample_num_initial > 0:
-            self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
+        # if self.sample_num_boundary > 0:
+        #     self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
+        # if self.sample_num_initial > 0:
+        #     self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
         sampled_train_points = sampled_points_domain
-        if self.sample_num_boundary > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
-        if self.sample_num_initial > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
+        # if self.sample_num_boundary > 0:
+        #     sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
+        # if self.sample_num_initial > 0:
+        #     sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
         self.sampled_train_points.append(sampled_train_points)
         self.print_info()
 
