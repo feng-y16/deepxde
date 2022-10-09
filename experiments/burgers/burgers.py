@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
     parser.add_argument("--resample-ratio", type=float, default=0.4)
-    parser.add_argument("--resample-times", type=int, default=4)
+    parser.add_argument("--resample-times", type=int, default=800)
     parser.add_argument("--resample-splits", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
