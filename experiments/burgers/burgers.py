@@ -155,7 +155,7 @@ def test_nn(test_models=None, draw_annealing=False):
         resampled_points = test_model.resampled_data
         if resampled_points is not None:
             resampled_points = np.concatenate(resampled_points, axis=0)
-            ax.scatter(resampled_points[:, 1], resampled_points[:, 0], marker='X', s=5, color='black')
+            ax.scatter(resampled_points[100:, 1], resampled_points[100:, 0], marker='X', s=5, color='black')
         result_count += 1
     ax = plt.subplot(gs[-1, 0])
     fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")

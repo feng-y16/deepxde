@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import sys
 import time
 
@@ -778,12 +779,13 @@ class PDELossAccumulativeResampler(Callback):
         self.rl_agent = None
         self.dim_points = None
         self.rl_points = None
+        self.num_rl_steps = 0
 
     def on_train_begin(self):
-        self.rl_agent = d3rlpy.algos.SAC(use_gpu=False)
+        self.rl_agent = d3rlpy.algos.SAC(use_gpu=True)
         self.num_bcs_initial = self.model.data.num_bcs
         self.dim_points = self.model.data.train_x.shape[-1]
-        self.rl_points = self.model.data.geom.uniform_points(32, boundary=False)
+        self.rl_points = self.model.data.train_x_all[-self.model.data.num_domain:]
 
     def get_weights_domain(self, x, operator, loss_weight=1.0):
         if isinstance(x, tuple):
@@ -848,21 +850,52 @@ class PDELossAccumulativeResampler(Callback):
         boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
         return utils.to_numpy(op(x, boundary_gts))
 
+    @staticmethod
+    def get_domain_indexes(x):
+        index1 = np.where(np.logical_and(x[:, 0] > 0, x[:, 1] > 0.5))[0]
+        index2 = np.where(np.logical_and(x[:, 0] > 0, x[:, 1] <= 0.5))[0]
+        index3 = np.where(np.logical_and(x[:, 0] <= 0, x[:, 1] > 0.5))[0]
+        index4 = np.where(np.logical_and(x[:, 0] <= 0, x[:, 1] <= 0.5))[0]
+        return [index1, index2, index3, index4]
+
+    def get_o(self):
+        all_domain_points = np.concatenate((self.rl_points, *self.sampled_train_points))
+        domain_indexes = self.get_domain_indexes(all_domain_points)
+        o = []
+        for domain_index in domain_indexes:
+            num_points = len(domain_index)
+            if num_points == 0:
+                o += [0, 0, 0]
+            else:
+                points = all_domain_points[domain_index]
+                losses = self.get_weights_domain(points, self.model.data.pde, 1.0)
+                o += [num_points / self.model.data.num_domain, losses.mean(), losses.std()]
+        o = np.array(o).reshape(1, -1)
+        return o
+
     def rl_step(self):
-        loss = self.get_weights_domain(self.rl_points, self.model.data.pde, 1.0)
-        o = np.concatenate((self.rl_points, loss.reshape(-1, 1)), axis=1).reshape(1, -1)
-        d = int(self.current_sample_times % 3 == 0)
-        if self.rl_dataset is None or len(self.rl_dataset) == 0:
-            a = self.model.data.geom.random_points(self.sample_num_domain)
-            r = self.get_weights_domain(a, self.model.data.pde, 1.0).mean()
-            self.rl_dataset = MDPDataset(o, a.reshape(1, -1), np.array([r]), np.array([d]))
+        self.num_rl_steps += 1
+        o = self.get_o()
+        d = self.num_rl_steps % 2
+        if self.rl_dataset is None or self.num_rl_steps < 2:
+            point = self.model.data.geom.random_points(self.sample_num_domain)
+            a = point.copy()
+            a[0][1] = a[0][1] * 2 - 1
         else:
-            self.rl_agent.fit(self.rl_dataset, n_epochs=2, verbose=False,
+            self.rl_agent.fit(self.rl_dataset, n_epochs=1, verbose=False,
                               save_metrics=False, show_progress=False)
-            a = self.rl_agent.predict(o).reshape(-1, self.dim_points)
-            r = self.get_weights_domain(a, self.model.data.pde, 1.0).mean()
-            self.rl_dataset.append(o, a.reshape(1, -1), np.array([r]), np.array([d]))
-        return a
+
+            a = self.rl_agent.sample_action(o).reshape(-1, self.dim_points)
+            point = a.copy()
+            point[0][1] = point[0][1] / 2 + 0.5
+        r = self.get_weights_domain(a, self.model.data.pde, 1.0).mean()
+        if self.rl_dataset is None:
+            self.rl_dataset = MDPDataset(o, a.reshape(1, -1), np.array([r]), np.array([d]), np.array([d]))
+        else:
+            self.rl_dataset.append(o, a.reshape(1, -1), np.array([r]), np.array([d]), np.array([d]))
+            self.rl_dataset.build_episodes()
+        print(o[0], point[0])
+        return point
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
@@ -874,6 +907,13 @@ class PDELossAccumulativeResampler(Callback):
         self.model.data.add_train_points(None, None, boundary=False, train_x=sampled_points_domain)
         sampled_train_points = sampled_points_domain
         self.sampled_train_points.append(sampled_train_points)
+        plt.scatter(np.concatenate(self.sampled_train_points)[:, 0],
+                    np.concatenate(self.sampled_train_points)[:, 1],
+                    color="tab:blue")
+        plt.xlim(-1, 1)
+        plt.ylim(0, 1)
+        plt.savefig("debug.png")
+        plt.close()
         self.print_info()
 
     def print_info(self):
