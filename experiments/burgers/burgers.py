@@ -127,6 +127,7 @@ def test_nn(test_models=None, draw_annealing=False):
     num_results = len(test_models)
     if not draw_annealing:
         num_results //= 2
+        num_results = max(num_results, 1)
     num_results += 1
     plt.figure(figsize=(12, 3 * num_results))
     gs = GridSpec(num_results, 1)
@@ -154,7 +155,7 @@ def test_nn(test_models=None, draw_annealing=False):
         resampled_points = test_model.resampled_data
         if resampled_points is not None:
             resampled_points = np.concatenate(resampled_points, axis=0)
-            ax.scatter(resampled_points[:, 1], resampled_points[:, 0], marker='X', s=5, color='black')
+            ax.scatter(resampled_points[-50000:, 1], resampled_points[-50000:, 0], marker='X', s=0.1, color='black')
         result_count += 1
     ax = plt.subplot(gs[-1, 0])
     fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")

@@ -1,3 +1,4 @@
+import pdb
 import sys
 import time
 
@@ -13,6 +14,10 @@ from .backend import backend_name, tf, torch, paddle
 from .icbc import IC
 from .utils import list_to_str, save_animation
 from .gradients import jacobian
+from .nn import FNN
+from tqdm import tqdm
+import copy
+import matplotlib.pyplot as plt
 
 
 class Callback:
@@ -798,7 +803,9 @@ class PDELossAccumulativeResampler(Callback):
         self.sample_every = sample_every
         self.sample_times = sample_times
         self.sample_num = sample_num_domain
-        self.sample_num_domain = sample_num_domain // sample_times
+        self.sample_num_domain = sample_num_domain
+        self.sample_num = 2000
+        self.sample_num_domain = 2000
         self.sample_num_boundary = sample_num_boundary // sample_times
         self.sample_num_initial = sample_num_initial // sample_times
         self.sample_splits = sample_splits
@@ -807,16 +814,13 @@ class PDELossAccumulativeResampler(Callback):
         self.sampled_train_points = []
         self.num_bcs_initial = None
         self.boundary = False
+        self.gan = FNN([2] + [20] * 3 + [2], "tanh", "Glorot normal")
+        self.opt = tf.keras.optimizers.Adam(learning_rate=2e-4)
+        self.loss_domain = None
+        self.train_x = None
+        self.pbar = tqdm(total=self.sample_num)
 
-    def on_train_begin(self):
-        self.num_bcs_initial = self.model.data.num_bcs
-
-    def get_weights_domain(self, x, operator, loss_weight=1.0):
-        if isinstance(x, tuple):
-            x = tuple(np.asarray(xi, dtype=config.real(np)) for xi in x)
-        else:
-            x = np.asarray(x, dtype=config.real(np))
-
+    def get_loss_domain(self, operator):
         if utils.get_num_args(operator) == 2:
 
             @tf.function
@@ -832,10 +836,7 @@ class PDELossAccumulativeResampler(Callback):
                             loss += out ** 2
                 else:
                     loss = outs ** 2
-                if loss_weight == 1:
-                    return tf.reduce_sum(loss, axis=1)
-                return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                       (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
+                return loss
         else:
             assert utils.get_num_args(operator) == 3
             aux_vars = self.model.data.auxiliary_var_fn(x).astype(config.real(np))
@@ -853,78 +854,51 @@ class PDELossAccumulativeResampler(Callback):
                             loss += out ** 2
                 else:
                     loss = outs ** 2
-                if loss_weight == 1:
-                    return tf.reduce_sum(loss, axis=1)
-                return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                       (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
-        return utils.to_numpy(op(x))
+                return loss
+        return op
 
-    def get_weights_boundary(self, x, bcs, loss_weight=1.0):
+    @tf.function(jit_compile=config.xla_jit)
+    def sample_train_points(self, num_samples):
+        with tf.GradientTape() as tape:
+            out = tf.math.tanh(self.gan(tf.random.normal([num_samples, 2])))
+            samples_x = out[:, 0]
+            samples_t = (out[:, 1] + 1) / 2
+            samples = tf.stack((samples_x, samples_t), axis=1)
+            losses = self.loss_domain(samples)
+            total_loss = -tf.math.reduce_mean(losses)
+        trainable_variables = self.gan.trainable_variables
+        grads = tape.gradient(total_loss, trainable_variables)
+        self.opt.apply_gradients(zip(grads, trainable_variables))
+        return samples, total_loss
 
-        @tf.function
-        def op(inputs, boundary_gts):
-            y = self.model.net(inputs)
-            loss = tf.reduce_sum((y[:, :boundary_gts.shape[-1]] - boundary_gts) ** 2, axis=1, keepdims=True)
-            return loss_weight * tf.reduce_sum(loss, axis=1) + \
-                   (1 - loss_weight) * tf.reduce_sum(jacobian(loss, inputs, i=0) ** 2, axis=1)
-        boundary_gts = []
-        for bc in bcs:
-            if type(bc) != IC or len(bcs) == 1:
-                boundary_gts.append(bc.original_func(x))
-        boundary_gts = np.concatenate(boundary_gts, axis=1).astype(dtype=config.real(np))
-        return utils.to_numpy(op(x, boundary_gts))
+    def on_train_begin(self):
+        self.num_bcs_initial = self.model.data.num_bcs
+        self.train_x = copy.deepcopy(self.model.data.train_x)
+        self.loss_domain = self.get_loss_domain(self.model.data.pde)
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
         if self.epochs_since_last_sample < self.sample_every or self.current_sample_times == self.sample_times:
+            self.pbar.close()
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        sampled_points_domain, sampled_points_boundary, sampled_points_initial = None, None, None
-        for i in range(self.sample_splits):
-
-            def sample_prob(sample):
-                prob = self.get_weights_domain(sample, self.model.data.pde)
-                return prob
-            temp = self.model.data.sample_train_points(
-                sample_prob, self.sample_num_domain // self.sample_splits,
-                sampler=self.model.data.geom.random_points)
-            if i == 0:
-                sampled_points_domain = temp
-            else:
-                sampled_points_domain = np.concatenate((sampled_points_domain, temp))
-
-            def sample_prob(sample):
-                prob = self.get_weights_boundary(sample, self.model.data.bcs)
-                return prob
-            if self.sample_num_boundary > 0:
-                temp = self.model.data.sample_train_points(
-                    sample_prob, self.sample_num_boundary // self.sample_splits,
-                    sampler=self.model.data.geom.random_boundary_points)
-                if i == 0:
-                    sampled_points_boundary = temp
-                else:
-                    sampled_points_boundary = np.concatenate((sampled_points_boundary, temp))
-            if self.sample_num_initial > 0:
-                temp = self.model.data.sample_train_points(
-                    sample_prob, self.sample_num_initial // self.sample_splits,
-                    sampler=self.model.data.geom.random_initial_points)
-                if i == 0:
-                    sampled_points_initial = temp
-                else:
-                    sampled_points_initial = np.concatenate((sampled_points_initial, temp))
-        self.model.data.add_train_points(None, None, boundary=False, train_x=sampled_points_domain)
-        if self.sample_num_boundary > 0:
-            self.model.data.add_train_points(None, None, boundary=True, train_x=sampled_points_boundary)
-        if self.sample_num_initial > 0:
-            self.model.data.add_train_points(None, None, boundary=True, initial=True, train_x=sampled_points_initial)
-        sampled_train_points = sampled_points_domain
-        if self.sample_num_boundary > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_boundary), axis=0)
-        if self.sample_num_initial > 0:
-            sampled_train_points = np.concatenate((sampled_train_points, sampled_points_initial), axis=0)
-        self.sampled_train_points.append(sampled_train_points)
-        self.print_info()
+        sampled_points_domain = None
+        for _ in range(5):
+            sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain)
+            sampled_points_domain = utils.to_numpy(sampled_points_domain)
+            total_loss = utils.to_numpy(total_loss)
+            self.pbar.set_postfix(loss=total_loss, x_mean=sampled_points_domain[:, 0].mean(),
+                                  t_mean=sampled_points_domain[:, 1].mean())
+        self.pbar.update()
+        self.model.data.train_x = np.concatenate((self.train_x, sampled_points_domain), axis=0)
+        self.sampled_train_points.append(sampled_points_domain)
+        plt.scatter(self.sampled_train_points[-1][:, 1], self.sampled_train_points[-1][:, 0],
+                    color="tab:blue")
+        plt.xlim(0, 1)
+        plt.ylim(-1, 1)
+        plt.savefig("debug.png")
+        plt.close()
 
     def print_info(self):
         print(self.model.data.num_domain, end=" ")
