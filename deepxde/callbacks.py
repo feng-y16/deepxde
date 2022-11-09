@@ -802,6 +802,7 @@ class PDELossAccumulativeResampler(Callback):
         super().__init__()
         self.sample_every = sample_every
         self.sample_num_domain = sample_num_domain
+        self.sample_times = epochs // sample_every
         self.debug_dir = debug_dir
         self.current_sample_times = 0
         self.epochs_since_last_sample = 0
@@ -812,7 +813,7 @@ class PDELossAccumulativeResampler(Callback):
         self.loss_domain = None
         self.train_x = None
         self.sampled_points_domain = None
-        self.pbar = tqdm(total=epochs // sample_every)
+        self.pbar = tqdm(total=self.sample_times)
 
     def get_loss_domain(self, operator):
         if utils.get_num_args(operator) == 2:
@@ -882,14 +883,14 @@ class PDELossAccumulativeResampler(Callback):
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
         self.model.data.train_x = self.current_train_x()
-        if self.current_sample_times == self.sample_num_domain:
+        if self.current_sample_times == self.sample_times:
             self.pbar.close()
             return
         if self.epochs_since_last_sample < self.sample_every:
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        for _ in range(self.sample_every):
+        for _ in range(1):
             sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain * 2)
             sampled_points_domain = utils.to_numpy(sampled_points_domain)
             total_loss = utils.to_numpy(total_loss)
