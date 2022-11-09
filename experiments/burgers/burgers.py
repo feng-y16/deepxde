@@ -16,12 +16,11 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=2000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=4000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
-    parser.add_argument("--resample-ratio", type=float, default=0.4)
-    parser.add_argument("--resample-times", type=int, default=4)
-    parser.add_argument("--resample-splits", type=int, default=1)
+    parser.add_argument("--resample-ratio", type=float, default=0.5)
+    parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
@@ -30,8 +29,6 @@ def parse_args():
     parser.add_argument("--sigma", type=float, default=0.1)
     parser.add_argument("--draw-annealing", action="store_true", default=False)
     parser.add_argument("--sensitivity", action="store_true", default=False)
-    parser.add_argument("--domain-only", action="store_true", default=False)
-    parser.add_argument("--boundary-only", action="store_true", default=False)
     return parser.parse_known_args()[0]
 
 
@@ -178,13 +175,10 @@ print(args)
 resample = args.resample
 adversarial = args.adversarial
 annealing = args.annealing
-domain_only = args.domain_only
-boundary_only = args.boundary_only
 sensitivity = args.sensitivity
 loss_weights = args.loss_weights
-resample_times = args.resample_times
 resample_ratio = args.resample_ratio
-resample_splits = args.resample_splits
+resample_every = args.resample_every
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
 num_train_samples_boundary = args.num_train_samples_boundary
@@ -204,8 +198,8 @@ if boundary_only:
 if annealing:
     prefix += "-A"
 if prefix[:4] == "LWIS" and sensitivity:
-    prefix += "_{:}".format(resample_times)
-print("resample:", resample, resample_times, resample_splits)
+    prefix += "_{:}".format(resample_every)
+print("resample:", resample, resample_times, resample_every)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -220,17 +214,11 @@ ic = dde.icbc.IC(
 )
 
 if resample or adversarial:
-    num_domain = num_train_samples_domain if boundary_only else \
-        int(num_train_samples_domain - num_train_samples_domain * resample_ratio)
-    num_boundary = num_train_samples_boundary if domain_only else \
-        int(num_train_samples_boundary - num_train_samples_boundary * resample_ratio)
-    num_initial = num_train_samples_initial if domain_only else \
-        int(num_train_samples_initial - num_train_samples_initial * resample_ratio)
     data = dde.data.TimePDE(
         geomtime, pde, [bc, ic],
-        num_domain=num_domain,
-        num_boundary=num_boundary,
-        num_initial=num_initial
+        num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
+        num_boundary=num_train_samples_boundary,
+        num_initial=num_train_samples_initial
     )
 else:
     data = dde.data.TimePDE(
@@ -255,23 +243,16 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
-        sample_num_domain = 0 if boundary_only else int(num_train_samples_domain * resample_ratio)
-        sample_num_boundary = 0 if domain_only else int(num_train_samples_boundary * resample_ratio)
-        sample_num_initial = 0 if domain_only else int(num_train_samples_initial * resample_ratio)
+        sample_num_domain = int(num_train_samples_domain * resample_ratio)
         resampler = dde.callbacks.PDELossAccumulativeResampler(
-            sample_every=(epochs // (resample_times + 1) + 1) // 3,
-            sample_num_domain=sample_num_domain,
-            sample_num_boundary=sample_num_boundary,
-            sample_num_initial=sample_num_initial,
-            sample_times=resample_times,
-            sample_splits=resample_splits)
+            sample_every=resample_every, sample_num_domain=sample_num_domain)
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
             sample_every=epochs // resample_times,
             sample_num_domain=num_train_samples_domain,
-            sample_num_boundary=num_train_samples_boundary,
-            sample_num_initial=num_train_samples_initial,
+            sample_num_boundary=0,
+            sample_num_initial=0,
             sample_times=resample_times,
             eta=0.01)
         callbacks.append(resampler)
