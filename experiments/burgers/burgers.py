@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
     parser.add_argument("--resample-ratio", type=float, default=0.5)
-    parser.add_argument("--resample-every", type=int, default=1)
+    parser.add_argument("--resample-every", type=int, default=2)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
@@ -191,15 +191,11 @@ elif adversarial:
     prefix = "AT"
 else:
     prefix = "PINN"
-if domain_only:
-    prefix += "-D"
-if boundary_only:
-    prefix += "-B"
 if annealing:
     prefix += "-A"
 if prefix[:4] == "LWIS" and sensitivity:
     prefix += "_{:}".format(resample_every)
-print("resample:", resample, resample_times, resample_every)
+print("resample:", resample, resample_every)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -218,14 +214,16 @@ if resample or adversarial:
         geomtime, pde, [bc, ic],
         num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
         num_boundary=num_train_samples_boundary,
-        num_initial=num_train_samples_initial
+        num_initial=num_train_samples_initial,
+        train_distribution="uniform"
     )
 else:
     data = dde.data.TimePDE(
         geomtime, pde, [bc, ic],
         num_domain=num_train_samples_domain,
         num_boundary=num_train_samples_boundary,
-        num_initial=num_train_samples_initial
+        num_initial=num_train_samples_initial,
+        train_distribution="uniform"
     )
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
@@ -245,7 +243,7 @@ if len(load) == 0:
     if resample:
         sample_num_domain = int(num_train_samples_domain * resample_ratio)
         resampler = dde.callbacks.PDELossAccumulativeResampler(
-            sample_every=resample_every, sample_num_domain=sample_num_domain)
+            sample_every=resample_every, sample_num_domain=sample_num_domain, debug_dir=save_dir)
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(

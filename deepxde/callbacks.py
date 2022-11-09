@@ -798,7 +798,7 @@ class PDEAdversarialAccumulativeResampler(Callback):
 class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, sample_every=100, sample_num_domain=100, debug_dir=None):
+    def __init__(self, sample_every=100, sample_num_domain=100, debug_dir=None, epochs=20000):
         super().__init__()
         self.sample_every = sample_every
         self.sample_num_domain = sample_num_domain
@@ -811,8 +811,8 @@ class PDELossAccumulativeResampler(Callback):
         self.opt = tf.keras.optimizers.Adam(learning_rate=2e-4)
         self.loss_domain = None
         self.train_x = None
-        self.time_splits = 3
-        self.pbar = tqdm(total=sample_num_domain)
+        self.sampled_points_domain = None
+        self.pbar = tqdm(total=epochs // sample_every)
 
     def get_loss_domain(self, operator):
         if utils.get_num_args(operator) == 2:
@@ -865,8 +865,14 @@ class PDELossAccumulativeResampler(Callback):
         self.opt.apply_gradients(zip(grads, trainable_variables))
         return samples, total_loss
 
-    # def current_train_x(self):
-    #     return np.concatenate((self.train_x, sampled_points_domain), axis=0)
+    def current_train_x(self):
+        if self.sampled_points_domain is not None:
+            threshold = self.epochs_since_last_sample / self.sample_every
+            filtered_sampled_points_domain = self.sampled_points_domain[
+                np.where(self.sampled_points_domain[:, 1] <= threshold)[0]]
+            return np.concatenate((self.train_x, filtered_sampled_points_domain), axis=0)
+        else:
+            return self.train_x
 
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
@@ -875,24 +881,26 @@ class PDELossAccumulativeResampler(Callback):
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
-        if self.current_sample_times == self.sample_times:
+        self.model.data.train_x = self.current_train_x()
+        if self.current_sample_times == self.sample_num_domain:
             self.pbar.close()
             return
         if self.epochs_since_last_sample < self.sample_every:
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain * 2)
-        sampled_points_domain = utils.to_numpy(sampled_points_domain)
-        total_loss = utils.to_numpy(total_loss)
-        self.pbar.set_postfix(loss=total_loss, x_mean=sampled_points_domain[:, 0].mean(),
-                              t_mean=sampled_points_domain[:, 1].mean())
+        for _ in range(self.sample_every):
+            sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain * 2)
+            sampled_points_domain = utils.to_numpy(sampled_points_domain)
+            total_loss = utils.to_numpy(total_loss)
+            self.pbar.set_postfix(loss=total_loss, x_mean=sampled_points_domain[:, 0].mean(),
+                                  t_mean=sampled_points_domain[:, 1].mean())
+            self.sampled_points_domain = sampled_points_domain
         self.pbar.update()
-        self.model.data.train_x = np.concatenate((self.train_x, sampled_points_domain), axis=0)
-        self.sampled_train_points.append(sampled_points_domain)
-        if self.debug_dir is not None:
+        self.sampled_train_points.append(self.sampled_points_domain)
+        if self.debug_dir is not None and self.current_sample_times % 10 == 0:
             plt.scatter(self.sampled_train_points[-1][:, 1], self.sampled_train_points[-1][:, 0],
-                        color="tab:blue")
+                        color="tab:blue", s=0.1)
             plt.xlim(0, 1)
             plt.ylim(-1, 1)
             plt.savefig(os.path.join(self.debug_dir, "samples_{:}.png".format(self.current_sample_times)))
