@@ -16,17 +16,16 @@ import datetime
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=4000)
+    parser.add_argument("--num-train-samples-domain", type=int, default=2000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
     parser.add_argument("--resample-ratio", type=float, default=0.5)
-    parser.add_argument("--resample-every", type=int, default=2)
+    parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
     parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
-    parser.add_argument("--sigma", type=float, default=0.1)
     parser.add_argument("--draw-annealing", action="store_true", default=False)
     parser.add_argument("--sensitivity", action="store_true", default=False)
     return parser.parse_known_args()[0]
@@ -117,6 +116,34 @@ def test_nn_sensitivity(test_models=None, losses=None):
     plt.savefig(os.path.join(save_dir, "sensitivity2.png"))
     plt.close()
 
+def test_nn_error(test_models=None):
+    if test_models is None:
+        test_models = {}
+    num_results = len(test_models)
+    plt.figure(figsize=(12, 3 * num_results))
+    gs = GridSpec(num_results, 1)
+    X, y_exact, t, x = gen_testdata()
+    result_count = 0
+    for legend, test_model in test_models.items():
+        y_pred = test_model.predict(X)
+        error = np.abs(y_exact - y_pred).reshape(-1)
+        ax = plt.subplot(gs[result_count, 0])
+        fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, error.reshape(len(t), len(x)),
+                            cmap="rainbow")
+        ax.set_xlabel("t")
+        ax.set_ylabel("x")
+        ax.set_xlim(0, 1)
+        ax.set_title("u-" + legend.split("_")[0])
+        plt.colorbar(fig, pad=0.05, aspect=10)
+        resampled_points = test_model.resampled_data
+        if resampled_points is not None:
+            resampled_points = np.concatenate(resampled_points, axis=0)
+            ax.scatter(resampled_points[-num_train_samples_domain:, 1], resampled_points[-num_train_samples_domain:, 0],
+                       marker='X', s=0.1, color='black')
+        result_count += 1
+    plt.savefig(os.path.join(save_dir, "figure_error.png"))
+    plt.savefig(os.path.join(save_dir, "figure_error.pdf"))
+
 
 def test_nn(test_models=None, draw_annealing=False):
     if test_models is None:
@@ -152,7 +179,8 @@ def test_nn(test_models=None, draw_annealing=False):
         resampled_points = test_model.resampled_data
         if resampled_points is not None:
             resampled_points = np.concatenate(resampled_points, axis=0)
-            ax.scatter(resampled_points[-50000:, 1], resampled_points[-50000:, 0], marker='X', s=0.1, color='black')
+            ax.scatter(resampled_points[-num_train_samples_domain:, 1], resampled_points[-num_train_samples_domain:, 0],
+                       marker='X', s=0.1, color='black')
         result_count += 1
     ax = plt.subplot(gs[-1, 0])
     fig = ax.pcolormesh(t * np.ones_like(x.T), np.ones_like(t) * x.T, y_exact.reshape(len(t), len(x)), cmap="rainbow")
@@ -214,16 +242,14 @@ if resample or adversarial:
         geomtime, pde, [bc, ic],
         num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
         num_boundary=num_train_samples_boundary,
-        num_initial=num_train_samples_initial,
-        train_distribution="uniform"
+        num_initial=num_train_samples_initial
     )
 else:
     data = dde.data.TimePDE(
         geomtime, pde, [bc, ic],
         num_domain=num_train_samples_domain,
         num_boundary=num_train_samples_boundary,
-        num_initial=num_train_samples_initial,
-        train_distribution="uniform"
+        num_initial=num_train_samples_initial
     )
 
 plt.rcParams["font.sans-serif"] = "Times New Roman"
@@ -243,7 +269,10 @@ if len(load) == 0:
     if resample:
         sample_num_domain = int(num_train_samples_domain * resample_ratio)
         resampler = dde.callbacks.PDELossAccumulativeResampler(
-            sample_every=resample_every, sample_num_domain=sample_num_domain, debug_dir=save_dir)
+            sample_every=resample_every,
+            sample_num_domain=sample_num_domain,
+            debug_dir=save_dir,
+            symmetric_constraints=[[-1, 1]])
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
@@ -296,4 +325,5 @@ else:
     else:
         plot_loss_combined(losses_test, "loss")
         test_nn(test_models=models, draw_annealing=args.draw_annealing)
+        test_nn_error(test_models=models)
     print("draw complete", file=sys.stderr)

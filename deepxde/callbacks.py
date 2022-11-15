@@ -798,21 +798,30 @@ class PDEAdversarialAccumulativeResampler(Callback):
 class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
-    def __init__(self, sample_every=100, sample_num_domain=100, debug_dir=None, epochs=20000):
+    def __init__(self, sample_every=100, sample_num_domain=100, debug_dir=None, epochs=20000,
+                 symmetric_constraints=None):
         super().__init__()
         self.sample_every = sample_every
         self.sample_num_domain = sample_num_domain
+        self.sample_times = epochs // sample_every
         self.debug_dir = debug_dir
         self.current_sample_times = 0
         self.epochs_since_last_sample = 0
         self.sampled_train_points = []
         self.num_bcs_initial = None
-        self.gan = FNN([2] + [20] * 3 + [2], "tanh", "Glorot normal")
+        self.gan = None
         self.opt = tf.keras.optimizers.Adam(learning_rate=2e-4)
         self.loss_domain = None
         self.train_x = None
         self.sampled_points_domain = None
-        self.pbar = tqdm(total=epochs // sample_every)
+        self.pbar = tqdm(total=self.sample_times)
+        self.x_mean = None
+        self.x_width = None
+        self.x_dim = None
+        if symmetric_constraints is not None:
+            self.symmetric_constraints = np.array(symmetric_constraints).astype(config.real(np))
+        else:
+            self.symmetric_constraints = None
 
     def get_loss_domain(self, operator):
         if utils.get_num_args(operator) == 2:
@@ -852,12 +861,16 @@ class PDELossAccumulativeResampler(Callback):
         return op
 
     @tf.function(jit_compile=config.xla_jit)
-    def sample_train_points(self, num_samples):
+    def sample_train_points(self, num_samples, x_mean, x_width, symmetric_constraints=None):
+        num_symmetric_constraints = 0 if symmetric_constraints is None else len(symmetric_constraints)
         with tf.GradientTape() as tape:
-            out = tf.math.tanh(self.gan(tf.random.normal([num_samples, 2])))
-            samples_x = out[:, 0]
-            samples_t = (out[:, 1] + 1) / 2
-            samples = tf.stack((samples_x, samples_t), axis=1)
+            num_samples //= 2 ** num_symmetric_constraints
+            samples = tf.math.tanh(self.gan(tf.random.normal([num_samples, self.x_dim])))
+            for i in range(num_symmetric_constraints):
+                temp = samples
+                temp *= symmetric_constraints[i]
+                samples = tf.concat([samples, temp], axis=0)
+            samples = samples * x_width + x_mean
             losses = self.loss_domain(samples)
             total_loss = -tf.math.reduce_mean(losses)
         trainable_variables = self.gan.trainable_variables
@@ -867,10 +880,11 @@ class PDELossAccumulativeResampler(Callback):
 
     def current_train_x(self):
         if self.sampled_points_domain is not None:
-            threshold = self.epochs_since_last_sample / self.sample_every
-            filtered_sampled_points_domain = self.sampled_points_domain[
-                np.where(self.sampled_points_domain[:, 1] <= threshold)[0]]
-            return np.concatenate((self.train_x, filtered_sampled_points_domain), axis=0)
+            # threshold = self.epochs_since_last_sample / self.sample_every
+            # filtered_sampled_points_domain = self.sampled_points_domain[
+            #     np.where(self.sampled_points_domain[:, 1] <= threshold)[0]]
+            # return np.concatenate((self.train_x, filtered_sampled_points_domain), axis=0)
+            return np.concatenate((self.train_x, self.sampled_points_domain), axis=0)
         else:
             return self.train_x
 
@@ -878,11 +892,24 @@ class PDELossAccumulativeResampler(Callback):
         self.num_bcs_initial = self.model.data.num_bcs
         self.train_x = copy.deepcopy(self.model.data.train_x)
         self.loss_domain = self.get_loss_domain(self.model.data.pde)
+        geom = self.model.data.geom
+        if hasattr(geom, "timedomain"):
+            x_min = geom.geometry.xmin if hasattr(geom.geometry, "xmin") else np.array([geom.geometry.l])
+            x_max = geom.geometry.xmax if hasattr(geom.geometry, "xmax") else np.array([geom.geometry.r])
+            x_min = np.concatenate((x_min, np.array([geom.timedomain.t0])), axis=0)
+            x_max = np.concatenate((x_max, np.array([geom.timedomain.t1])), axis=0)
+        else:
+            x_min = geom.xmin if hasattr(geom, "xmin") else np.array([geom.l])
+            x_max = geom.xmax if hasattr(geom, "xmax") else np.array([geom.r])
+        self.x_mean = ((np.array(x_max) + np.array(x_min)) / 2).astype(config.real(np))
+        self.x_width = ((np.array(x_max) - np.array(x_min)) / 2).astype(config.real(np))
+        self.x_dim = len(self.x_mean)
+        self.gan = FNN([self.x_dim] + [20] * 3 + [self.x_dim], "relu", "Glorot normal")
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
         self.model.data.train_x = self.current_train_x()
-        if self.current_sample_times == self.sample_num_domain:
+        if self.current_sample_times == self.sample_times:
             self.pbar.close()
             return
         if self.epochs_since_last_sample < self.sample_every:
@@ -890,18 +917,20 @@ class PDELossAccumulativeResampler(Callback):
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
         for _ in range(self.sample_every):
-            sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain * 2)
+            sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
+                                                                         self.x_mean,
+                                                                         self.x_width,
+                                                                         self.symmetric_constraints)
             sampled_points_domain = utils.to_numpy(sampled_points_domain)
             total_loss = utils.to_numpy(total_loss)
-            self.pbar.set_postfix(loss=total_loss, x_mean=sampled_points_domain[:, 0].mean(),
-                                  t_mean=sampled_points_domain[:, 1].mean())
+            self.pbar.set_postfix(loss=total_loss, sample_mean=sampled_points_domain.mean(axis=0))
             self.sampled_points_domain = sampled_points_domain
         self.pbar.update()
         self.sampled_train_points.append(self.sampled_points_domain)
-        if self.debug_dir is not None and self.current_sample_times % 10 == 0:
-            plt.scatter(self.sampled_train_points[-1][:, 1], self.sampled_train_points[-1][:, 0],
+        if self.debug_dir is not None and self.current_sample_times % 1000 == 0 or self.current_sample_times == 1:
+            plt.scatter(self.sampled_train_points[-1][:, 0], self.sampled_train_points[-1][:, 1],
                         color="tab:blue", s=0.1)
-            plt.xlim(0, 1)
-            plt.ylim(-1, 1)
+            plt.xlim(self.x_mean[0] - self.x_width[0], self.x_mean[0] + self.x_width[0])
+            plt.ylim(self.x_mean[1] - self.x_width[1], self.x_mean[1] + self.x_width[1])
             plt.savefig(os.path.join(self.debug_dir, "samples_{:}.png".format(self.current_sample_times)))
             plt.close()

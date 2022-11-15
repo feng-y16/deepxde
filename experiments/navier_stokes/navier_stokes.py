@@ -20,9 +20,8 @@ def parse_args():
     parser.add_argument("--num-train-samples-domain", type=int, default=4000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=200)
     parser.add_argument("--num-train-samples-initial", type=int, default=200)
-    parser.add_argument("--resample-ratio", type=float, default=0.4)
-    parser.add_argument("--resample-times", type=int, default=4)
-    parser.add_argument("--resample-splits", type=int, default=1)
+    parser.add_argument("--resample-ratio", type=float, default=0.5)
+    parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
@@ -105,7 +104,7 @@ def plot_loss_combined(losses):
     plt.close()
 
 
-def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, resampled_points=None):
+def contour(grid, data_x, data_y, data_z, title, v_min=None, v_max=None, levels=20, resampled_points=None):
     ax = plt.subplot(grid)
     ax.contour(data_x, data_y, data_z, colors="k", linewidths=0.2, levels=levels, vmin=v_min, vmax=v_max)
     ax.contourf(data_x, data_y, data_z, cmap="rainbow", levels=levels, vmin=v_min, vmax=v_max)
@@ -118,9 +117,69 @@ def contour(grid, data_x, data_y, data_z, title, v_min=1, v_max=1, levels=20, re
     cbar = plt.colorbar(m, pad=0.03, aspect=25, format="%.0e")
     cbar.mappable.set_clim(v_min, v_max)
     if resampled_points is not None:
-        # ax.scatter(resampled_points[:, 0], resampled_points[:, 1], marker='X', s=10, color='black')
-        pass
+        ax.scatter(resampled_points[-num_train_samples_domain:, 0], resampled_points[-num_train_samples_domain:, 1],
+                   marker='X', s=0.1, color='black')
 
+def test_nn_error(times=None, test_models=None):
+    if test_models is None:
+        test_models = {}
+    if times is None:
+        times = [0.5, 1.0]
+    exact_data_path = os.path.join(save_dir, "re_{:}.pkl".format(Re))
+    if not os.path.isfile(exact_data_path):
+        exact_data = solve(n_points=num_test_samples, n_iterations=10000, re=Re)
+        with open(exact_data_path, "wb") as f_solver:
+            pickle.dump(exact_data, f_solver)
+    else:
+        with open(exact_data_path, "rb") as f_solver:
+            exact_data = pickle.load(f_solver)
+    for time in times:
+        x, y = np.meshgrid(np.linspace(0, 1, num_test_samples), np.linspace(0, 1, num_test_samples))
+        X = np.vstack((np.ravel(x), np.ravel(y))).T
+        t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
+        X = np.hstack((X, t))
+        u_exact = exact_data[time]["u"].reshape(-1)
+        v_exact = exact_data[time]["v"].reshape(-1)
+        p_exact = exact_data[time]["p"].reshape(-1)
+        p_exact -= p_exact.mean()
+        num_results = len(test_models)
+        num_results += 1
+        plt.figure(figsize=(12, 3 * num_results))
+        gs = GridSpec(num_results, 3)
+        u_min = np.min(u_exact)
+        u_max = np.max(u_exact)
+        v_min = np.min(v_exact)
+        v_max = np.max(v_exact)
+        p_min = np.min(p_exact)
+        p_max = np.max(p_exact)
+        result_count = 0
+        for legend, test_model in test_models.items():
+            output = test_model.predict(X)
+            u_pred = output[:, 0].reshape(-1)
+            v_pred = output[:, 1].reshape(-1)
+            p_pred = output[:, 2].reshape(-1)
+            p_pred -= p_pred.mean()
+            error_u = np.abs(u_exact - u_pred).reshape(-1)
+            error_v = np.abs(v_exact - v_pred).reshape(-1)
+            error_p = np.abs(p_exact - p_pred).reshape(-1)
+            resampled_points = test_model.resampled_data
+            if resampled_points is not None:
+                resampled_points = np.concatenate(resampled_points, axis=0)
+                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.01)[0]
+                resampled_points = resampled_points[selected_index][:, :2]
+            contour(gs[result_count, 0], x, y, error_u.reshape(num_test_samples, num_test_samples),
+                    "u-" + legend.split("_")[0], None, None, 20, resampled_points)
+            contour(gs[result_count, 1], x, y, error_v.reshape(num_test_samples, num_test_samples),
+                    "v-" + legend.split("_")[0], None, None, 20, resampled_points)
+            contour(gs[result_count, 2], x, y, error_p.reshape(num_test_samples, num_test_samples),
+                    "p-" + legend.split("_")[0], None, None, 20, resampled_points)
+            result_count += 1
+        contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
+        contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
+        contour(gs[-1, 2], x, y, p_exact.reshape(num_test_samples, num_test_samples), 'p-exact', p_min, p_max, 20)
+        plt.savefig(os.path.join(save_dir, "Re={}_t={}_error.png".format(Re, time)))
+        plt.savefig(os.path.join(save_dir, "Re={}_t={}_error.pdf".format(Re, time)))
+        plt.close()
 
 def test_nn(times=None, test_models=None, draw_annealing=False):
     if test_models is None:
@@ -150,6 +209,7 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         num_results = len(test_models)
         if not draw_annealing and num_results % 2 == 0:
             num_results //= 2
+            num_results = max(num_results, 1)
         num_results += 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
@@ -244,9 +304,8 @@ resample = args.resample
 adversarial = args.adversarial
 annealing = args.annealing
 loss_weights = args.loss_weights
-resample_times = args.resample_times
 resample_ratio = args.resample_ratio
-resample_splits = args.resample_splits
+resample_every = args.resample_every
 epochs = args.epochs
 num_train_samples_domain = args.num_train_samples_domain
 num_train_samples_boundary = args.num_train_samples_boundary
@@ -263,8 +322,8 @@ else:
     prefix = "PINN"
 if annealing:
     prefix += "-A"
-prefix += "_{:}".format(Re)
-print("resample:", resample, resample_times, resample_splits)
+prefix += "_{:.1f}".format(Re)
+print("resample:", resample, resample_every)
 print("adversarial:", adversarial)
 print("annealing:", annealing)
 print("data points:", num_train_samples_domain, num_train_samples_boundary, num_train_samples_initial)
@@ -294,8 +353,8 @@ if resample or adversarial:
         [boundary_condition_u, boundary_condition_v,
          initial_condition_u, initial_condition_v],
         num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
-        num_boundary=int(num_train_samples_boundary - num_train_samples_boundary * resample_ratio),
-        num_initial=int(num_train_samples_initial - num_train_samples_initial * resample_ratio),
+        num_boundary=num_train_samples_boundary,
+        num_initial=num_train_samples_initial,
         num_test=20000)
 else:
     data = dde.data.TimePDE(
@@ -321,13 +380,12 @@ if len(load) == 0:
     model.compile("adam", lr=1e-3, loss_weights=loss_weights)
     callbacks = []
     if resample:
+        sample_num_domain = int(num_train_samples_domain * resample_ratio)
         resampler = dde.callbacks.PDELossAccumulativeResampler(
-            sample_every=(epochs // (resample_times + 1) + 1) // 3,
-            sample_num_domain=int(num_train_samples_domain * resample_ratio),
-            sample_num_boundary=int(num_train_samples_boundary * resample_ratio),
-            sample_num_initial=int(num_train_samples_initial * resample_ratio),
-            sample_times=resample_times,
-            sample_splits=resample_splits)
+            sample_every=resample_every,
+            sample_num_domain=sample_num_domain,
+            debug_dir=save_dir,
+            symmetric_constraints=None)
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
@@ -377,4 +435,5 @@ else:
         losses_test[prefix] = np.array(loss_history.loss_test).sum(axis=1)
     plot_loss_combined(losses_test)
     test_nn(test_models=models, draw_annealing=args.draw_annealing)
+    test_nn_error(test_models=models)
     print("draw complete", file=sys.stderr)
