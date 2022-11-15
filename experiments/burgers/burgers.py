@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-domain", type=int, default=2000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
-    parser.add_argument("--resample-ratio", type=float, default=0.5)
+    parser.add_argument("--resample-ratio", type=float, default=1.0)
     parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
@@ -151,7 +151,7 @@ def test_nn(test_models=None, draw_annealing=False):
     num_results = len(test_models)
     if not draw_annealing:
         num_results //= 2
-        num_results = max(num_results, 1)
+        num_results = max(num_results, 2)
     num_results += 1
     plt.figure(figsize=(12, 3 * num_results))
     gs = GridSpec(num_results, 1)

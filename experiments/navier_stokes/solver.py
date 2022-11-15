@@ -135,7 +135,7 @@ from tqdm import tqdm
 
 DOMAIN_SIZE = 1.0
 DENSITY = 1.0
-HORIZONTAL_VELOCITY_TOP = 1.0
+HORIZONTAL_VELOCITY_TOP = 0.0
 N_PRESSURE_POISSON_ITERATIONS = 50
 STABILITY_SAFETY_FACTOR = 0.5
 
@@ -150,7 +150,7 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
     x = torch.linspace(0.0, DOMAIN_SIZE, n_points, device=device)
     y = torch.linspace(0.0, DOMAIN_SIZE, n_points, device=device)
 
-    X, Y = torch.meshgrid(x, y, indexing='ij')
+    Y, X = torch.meshgrid(x, y, indexing='ij')
 
     u_prev = torch.zeros_like(X)
     v_prev = torch.zeros_like(X)
@@ -229,8 +229,8 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
                         )
                         +
                         kinematic_viscosity * laplace__u_prev
-                        # +
-                        # 0.1 * torch.sin(2 * np.pi * (X + Y))
+                        +
+                        torch.sin(2 * np.pi * (X - Y))
                 )
         )
         v_tent = (
@@ -245,8 +245,8 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
                         )
                         +
                         kinematic_viscosity * laplace__v_prev
-                        # +
-                        # 0.1 * torch.sin(2 * np.pi * (X + Y))
+                        +
+                        torch.sin(2 * np.pi * (X - Y))
                 )
         )
 
@@ -308,7 +308,7 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
             p_next[:, -1] = p_next[:, -2]
             p_next[0, :] = p_next[1, :]
             p_next[:, 0] = p_next[:, 1]
-            p_next[-1, :] = 0.0
+            p_next[-1, :] = p_next[-2, :]
 
             p_prev = p_next
 

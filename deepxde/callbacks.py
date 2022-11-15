@@ -904,7 +904,7 @@ class PDELossAccumulativeResampler(Callback):
         self.x_mean = ((np.array(x_max) + np.array(x_min)) / 2).astype(config.real(np))
         self.x_width = ((np.array(x_max) - np.array(x_min)) / 2).astype(config.real(np))
         self.x_dim = len(self.x_mean)
-        self.gan = FNN([self.x_dim] + [20] * 3 + [self.x_dim], "relu", "Glorot normal")
+        self.gan = FNN([self.x_dim] + [32] * 3 + [self.x_dim], "relu", "Glorot normal")
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
@@ -916,7 +916,7 @@ class PDELossAccumulativeResampler(Callback):
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        for _ in range(self.sample_every):
+        for _ in range(1):
             sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
                                                                          self.x_mean,
                                                                          self.x_width,

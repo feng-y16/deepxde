@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-domain", type=int, default=4000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=200)
     parser.add_argument("--num-train-samples-initial", type=int, default=200)
-    parser.add_argument("--resample-ratio", type=float, default=0.5)
+    parser.add_argument("--resample-ratio", type=float, default=1.0)
     parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
@@ -60,12 +60,14 @@ def pde_re(re, x, u):
             + (u_vel * u_vel_x + v_vel * u_vel_y)
             + p_x
             - 1 / re * (u_vel_xx + u_vel_yy)
+            - tf.sin(2 * np.pi * (x[:, 0:1] - x[:, 1:2]))
     )
     momentum_y = (
             v_vel_t
             + (u_vel * v_vel_x + v_vel * v_vel_y)
             + p_y
             - 1 / re * (v_vel_xx + v_vel_yy)
+            - tf.sin(2 * np.pi * (x[:, 0:1] - x[:, 1:2]))
     )
     continuity = u_vel_x + v_vel_y
 
@@ -73,7 +75,7 @@ def pde_re(re, x, u):
 
 
 def u_func(x):
-    return np.where(x[:, 1:2] == 1, 1, 0)
+    return np.zeros_like(x[:, 0:1])
 
 
 def v_func(x):
@@ -119,6 +121,7 @@ def contour(grid, data_x, data_y, data_z, title, v_min=None, v_max=None, levels=
     if resampled_points is not None:
         ax.scatter(resampled_points[-num_train_samples_domain:, 0], resampled_points[-num_train_samples_domain:, 1],
                    marker='X', s=0.1, color='black')
+
 
 def test_nn_error(times=None, test_models=None):
     if test_models is None:
@@ -181,6 +184,7 @@ def test_nn_error(times=None, test_models=None):
         plt.savefig(os.path.join(save_dir, "Re={}_t={}_error.pdf".format(Re, time)))
         plt.close()
 
+
 def test_nn(times=None, test_models=None, draw_annealing=False):
     if test_models is None:
         test_models = {}
@@ -209,7 +213,7 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
         num_results = len(test_models)
         if not draw_annealing and num_results % 2 == 0:
             num_results //= 2
-            num_results = max(num_results, 1)
+            num_results = max(num_results, 2)
         num_results += 1
         plt.figure(figsize=(12, 3 * num_results))
         gs = GridSpec(num_results, 3)
