@@ -880,13 +880,13 @@ class PDELossAccumulativeResampler(Callback):
 
     def current_train_x(self):
         if self.sampled_points_domain is not None:
-            # threshold = self.epochs_since_last_sample / self.sample_every
-            # filtered_sampled_points_domain = self.sampled_points_domain[
-            #     np.where(self.sampled_points_domain[:, 1] <= threshold)[0]]
-            # return np.concatenate((self.train_x, filtered_sampled_points_domain), axis=0)
-            return np.concatenate((self.train_x, self.sampled_points_domain), axis=0)
+            # threshold = self.current_sample_times / self.sample_times
+            # sampled_points_domain = self.sampled_points_domain[self.sampled_points_domain[:, -1] < threshold]
+            # train_x_all = np.concatenate((self.train_x, sampled_points_domain), axis=0)
+            train_x_all = np.concatenate((self.train_x, self.sampled_points_domain), axis=0)
         else:
-            return self.train_x
+            train_x_all = self.train_x
+        return train_x_all
 
     def on_train_begin(self):
         self.num_bcs_initial = self.model.data.num_bcs
@@ -907,8 +907,8 @@ class PDELossAccumulativeResampler(Callback):
         self.gan = FNN([self.x_dim] + [32] * 3 + [self.x_dim], "relu", "Glorot normal")
 
     def on_epoch_end(self):
-        self.epochs_since_last_sample += 1
         self.model.data.train_x = self.current_train_x()
+        self.epochs_since_last_sample += 1
         if self.current_sample_times == self.sample_times:
             self.pbar.close()
             return

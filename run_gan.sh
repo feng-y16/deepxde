@@ -12,7 +12,7 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 if [ "$exp_name" == "navier_stokes" ]; then
-  res=(250)
+  res=(200)
   for re in "${res[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
     --re "$re" &> experiments/"$exp_name"/PINN_"$re".0.txt &

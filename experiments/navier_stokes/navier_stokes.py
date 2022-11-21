@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-domain", type=int, default=4000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=200)
     parser.add_argument("--num-train-samples-initial", type=int, default=200)
-    parser.add_argument("--resample-ratio", type=float, default=1.0)
+    parser.add_argument("--resample-ratio", type=float, default=0.5)
     parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
@@ -80,6 +80,14 @@ def u_func(x):
 
 def v_func(x):
     return np.zeros_like(x[:, 0:1])
+
+
+def on_boundary(_, boundary):
+    return boundary
+
+
+def on_initial(_, initial):
+    return initial
 
 
 def plot_loss(loss_train, loss_test):
@@ -263,17 +271,12 @@ def test_nn(times=None, test_models=None, draw_annealing=False):
             print("Top {:} error in u, v, p: {:.3f} & {:.3f} & {:.3f}".format(top_k, error_u, error_v, error_p))
             if not draw_annealing and legend.split("_")[0][-2:] == "-A":
                 continue
-            resampled_points = test_model.resampled_data
-            if resampled_points is not None:
-                resampled_points = np.concatenate(resampled_points, axis=0)
-                selected_index = np.where(np.abs(resampled_points[:, 2] - time) < 0.01)[0]
-                resampled_points = resampled_points[selected_index][:, :2]
             contour(gs[result_count, 0], x, y, u_pred.reshape(num_test_samples, num_test_samples),
-                    "u-" + legend.split("_")[0], u_min, u_max, 20, resampled_points)
+                    "u-" + legend.split("_")[0], u_min, u_max, 20, None)
             contour(gs[result_count, 1], x, y, v_pred.reshape(num_test_samples, num_test_samples),
-                    "v-" + legend.split("_")[0], v_min, v_max, 20, resampled_points)
+                    "v-" + legend.split("_")[0], v_min, v_max, 20, None)
             contour(gs[result_count, 2], x, y, p_pred.reshape(num_test_samples, num_test_samples),
-                    "p-" + legend.split("_")[0], p_min, p_max, 20, resampled_points)
+                    "p-" + legend.split("_")[0], p_min, p_max, 20, None)
             result_count += 1
         contour(gs[-1, 0], x, y, u_exact.reshape(num_test_samples, num_test_samples), 'u-exact', u_min, u_max, 20)
         contour(gs[-1, 1], x, y, v_exact.reshape(num_test_samples, num_test_samples), 'v-exact', v_min, v_max, 20)
@@ -342,14 +345,14 @@ temporal_domain = dde.geometry.TimeDomain(0, 1)
 spatio_temporal_domain = dde.geometry.GeometryXTime(spatial_domain, temporal_domain)
 
 boundary_condition_u = dde.icbc.DirichletBC(spatio_temporal_domain,
-                                            u_func, lambda _, on_boundary: on_boundary, component=0)
+                                            u_func, on_boundary, component=0)
 boundary_condition_v = dde.icbc.DirichletBC(spatio_temporal_domain,
-                                            v_func, lambda _, on_boundary: on_boundary, component=1)
+                                            v_func, on_boundary, component=1)
 
 initial_condition_u = dde.icbc.IC(spatio_temporal_domain,
-                                  u_func, lambda _, on_initial: on_initial, component=0)
+                                  u_func, on_initial, component=0)
 initial_condition_v = dde.icbc.IC(spatio_temporal_domain,
-                                  v_func, lambda _, on_initial: on_initial, component=1)
+                                  v_func, on_initial, component=1)
 
 if resample or adversarial:
     data = dde.data.TimePDE(

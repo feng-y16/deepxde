@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument("--num-train-samples-domain", type=int, default=2000)
     parser.add_argument("--num-train-samples-boundary", type=int, default=100)
     parser.add_argument("--num-train-samples-initial", type=int, default=100)
-    parser.add_argument("--resample-ratio", type=float, default=1.0)
+    parser.add_argument("--resample-ratio", type=float, default=0.5)
     parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
@@ -45,6 +45,18 @@ def pde(x, y):
     dy_t = dde.grad.jacobian(y, x, i=0, j=1)
     dy_xx = dde.grad.hessian(y, x, i=0, j=0)
     return dy_t + y * dy_x - 0.01 / np.pi * dy_xx
+
+
+def u_func(x):
+    return -np.sin(np.pi * x[:, 0:1])
+
+
+def on_boundary(_, boundary):
+    return boundary
+
+
+def on_initial(_, initial):
+    return initial
 
 
 def plot_loss(loss_train, loss_test):
@@ -115,6 +127,7 @@ def test_nn_sensitivity(test_models=None, losses=None):
     plt.savefig(os.path.join(save_dir, "sensitivity2.pdf"))
     plt.savefig(os.path.join(save_dir, "sensitivity2.png"))
     plt.close()
+
 
 def test_nn_error(test_models=None):
     if test_models is None:
@@ -232,10 +245,8 @@ geom = dde.geometry.Interval(-1, 1)
 timedomain = dde.geometry.TimeDomain(0, 1.0)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
-bc = dde.icbc.DirichletBC(geomtime, lambda x: np.zeros_like(x[:, 0:1]), lambda _, on_boundary: on_boundary)
-ic = dde.icbc.IC(
-    geomtime, lambda x: -np.sin(np.pi * x[:, 0:1]), lambda _, on_initial: on_initial
-)
+bc = dde.icbc.DirichletBC(geomtime, u_func, on_boundary)
+ic = dde.icbc.IC(geomtime, u_func, on_initial)
 
 if resample or adversarial:
     data = dde.data.TimePDE(
@@ -272,7 +283,7 @@ if len(load) == 0:
             sample_every=resample_every,
             sample_num_domain=sample_num_domain,
             debug_dir=save_dir,
-            symmetric_constraints=[[-1, 1]])
+            symmetric_constraints=None)
         callbacks.append(resampler)
     elif adversarial:
         resampler = dde.callbacks.PDEAdversarialAccumulativeResampler(
