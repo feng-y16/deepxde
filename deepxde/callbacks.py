@@ -795,7 +795,7 @@ class PDEAdversarialAccumulativeResampler(Callback):
         print("")
 
 
-class PDELossAccumulativeResampler(Callback):
+class PDEGANResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, sample_every=100, sample_num_domain=100, debug_dir=None, epochs=20000,
@@ -818,6 +818,8 @@ class PDELossAccumulativeResampler(Callback):
         self.x_mean = None
         self.x_width = None
         self.x_dim = None
+        self.train_x_ic = None
+        self.PINN_optimizer = None
         if symmetric_constraints is not None:
             self.symmetric_constraints = np.array(symmetric_constraints).astype(config.real(np))
         else:
@@ -861,11 +863,13 @@ class PDELossAccumulativeResampler(Callback):
         return op
 
     @tf.function(jit_compile=config.xla_jit)
-    def sample_train_points(self, num_samples, x_mean, x_width, symmetric_constraints=None):
+    def sample_train_points(self, num_samples, train_x_ic, x_mean, x_width, symmetric_constraints=None):
         num_symmetric_constraints = 0 if symmetric_constraints is None else len(symmetric_constraints)
         with tf.GradientTape() as tape:
             num_samples //= 2 ** num_symmetric_constraints
-            samples = tf.math.tanh(self.gan(tf.random.normal([num_samples, self.x_dim])))
+            # input = tf.concat((train_x_ic, tf.random.normal([num_samples, self.x_dim])), axis=1)
+            input = tf.random.normal([num_samples, self.x_dim], mean=0.0)
+            samples = tf.math.tanh(self.gan(input))
             for i in range(num_symmetric_constraints):
                 temp = samples
                 temp *= symmetric_constraints[i]
@@ -904,7 +908,9 @@ class PDELossAccumulativeResampler(Callback):
         self.x_mean = ((np.array(x_max) + np.array(x_min)) / 2).astype(config.real(np))
         self.x_width = ((np.array(x_max) - np.array(x_min)) / 2).astype(config.real(np))
         self.x_dim = len(self.x_mean)
-        self.gan = FNN([self.x_dim] + [32] * 3 + [self.x_dim], "relu", "Glorot normal")
+        # self.train_x_ic = self.model.data.train_x_ic.reshape(1, -1).repeat(self.sample_num_domain, axis=0)
+        self.train_x_ic = [[]]
+        self.gan = FNN([len(self.train_x_ic[0]) + self.x_dim] + [32] * 3 + [self.x_dim], "relu", "Glorot normal")
 
     def on_epoch_end(self):
         self.model.data.train_x = self.current_train_x()
@@ -918,6 +924,7 @@ class PDELossAccumulativeResampler(Callback):
         self.epochs_since_last_sample = 0
         for _ in range(1):
             sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
+                                                                         self.train_x_ic,
                                                                          self.x_mean,
                                                                          self.x_width,
                                                                          self.symmetric_constraints)

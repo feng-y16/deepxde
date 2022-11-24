@@ -102,6 +102,7 @@ class PDE(Data):
 
         # TODO: train_x_all is used for PDE losses. It is better to add train_x_pde 
         # explicitly.
+        self.train_x_ic = None
         self.train_x_all = None
         self.train_x_bc = None
         self.num_bcs = None
@@ -416,6 +417,7 @@ class TimePDE(PDE):
                     return not np.any([np.allclose(x, y) for y in self.exclusions])
 
                 tmp = np.array(list(filter(is_not_excluded, tmp)))
+            self.train_x_ic = tmp
             X = np.vstack((tmp, X))
         self.train_x_all = X
         return X
