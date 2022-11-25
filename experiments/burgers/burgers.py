@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument("--resample", action="store_true", default=False)
     parser.add_argument("--adversarial", action="store_true", default=False)
     parser.add_argument("--annealing", action="store_true", default=False)
-    parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 100, 100])
+    parser.add_argument("--loss-weights", nargs="+", type=float, default=[1, 1, 100, 100])
     parser.add_argument("--load", nargs='+', default=[])
     parser.add_argument("--draw-annealing", action="store_true", default=False)
     parser.add_argument("--sensitivity", action="store_true", default=False)
@@ -44,11 +44,13 @@ def pde(x, y):
     dy_x = dde.grad.jacobian(y, x, i=0, j=0)
     dy_t = dde.grad.jacobian(y, x, i=0, j=1)
     dy_xx = dde.grad.hessian(y, x, i=0, j=0)
-    return dy_t + y * dy_x - 0.01 / np.pi * dy_xx
+    loss_domain = dy_t + y * dy_x - 0.01 / np.pi * dy_xx
+    grad_penalty = tf.norm(dde.grad.jacobian(loss_domain, x, i=0, j=0), ord=2, axis=1) - 1
+    return [loss_domain, grad_penalty]
 
 
 def u_func(x):
-    return -np.sin(np.pi * x[:, 0:1])
+    return -np.sin(2 * np.pi * x[:, 0:1])
 
 
 def on_boundary(_, boundary):

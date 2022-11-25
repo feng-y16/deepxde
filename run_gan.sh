@@ -26,7 +26,7 @@ else
   &> experiments/"$exp_name"/PINN.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample &> experiments/"$exp_name"/LWIS.txt &
+  --resample # &> experiments/"$exp_name"/LWIS.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
 set +e
