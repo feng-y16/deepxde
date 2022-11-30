@@ -217,6 +217,7 @@ class Model:
             )
 
         opt = optimizers.get(self.opt_name, learning_rate=lr, decay=decay)
+        self.opt = opt
 
         @tf.function(jit_compile=config.xla_jit)
         def train_step(inputs, targets, auxiliary_vars):
