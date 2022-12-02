@@ -919,18 +919,11 @@ class PDELossAccumulativeResampler(Callback):
 
     def update_net(self):
         random_points_domain = self.model.data.geom.random_points(self.random_num_domain)
-        loss_weight = -0.001
-        # loss_weight = -0.001 if self.current_sample_times < self.sample_times / 2 else 0.001
+        loss_weight = -1e-3 if self.current_sample_times < self.sample_times / 2 else 1e-3
         loss = self.reverse_train_step(random_points_domain, loss_weight=loss_weight)
         return utils.to_numpy(loss)
 
     def on_epoch_end(self):
-        max_before = 0
-        max_after = 0
-        for w in self.model.net.trainable_variables:
-            max_before = max(max_before, utils.to_numpy(tf.reduce_max(tf.abs(w))))
-            w.assign(tf.clip_by_value(w, -1, 1))
-            max_after = max(max_after, utils.to_numpy(tf.reduce_max(tf.abs(w))))
         self.epochs_since_last_sample += 1
         if self.current_sample_times == self.sample_times:
             self.pbar.close()
@@ -939,16 +932,19 @@ class PDELossAccumulativeResampler(Callback):
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        total_loss_gan = 0
-        sampled_points_domain = None
-        for _ in range(1):
-            sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
-                                                                         self.x_mean,
-                                                                         self.x_width,
-                                                                         self.symmetric_constraints)
-            sampled_points_domain = utils.to_numpy(sampled_points_domain)
-            total_loss_gan = utils.to_numpy(total_loss)
-            self.sampled_points_domain = sampled_points_domain
+        max_before = 0
+        max_after = 0
+        for w in self.model.net.trainable_variables:
+            max_before = max(max_before, utils.to_numpy(tf.reduce_max(tf.abs(w))))
+            w.assign(tf.clip_by_value(w, -5, 5))
+            max_after = max(max_after, utils.to_numpy(tf.reduce_max(tf.abs(w))))
+        sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
+                                                                     self.x_mean,
+                                                                     self.x_width,
+                                                                     self.symmetric_constraints)
+        sampled_points_domain = utils.to_numpy(sampled_points_domain)
+        total_loss_gan = utils.to_numpy(total_loss)
+        self.sampled_points_domain = sampled_points_domain
         self.pbar.update()
         total_loss_random = self.update_net()
         self.pbar.set_postfix(loss_gan=total_loss_gan, loss_random=total_loss_random,

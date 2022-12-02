@@ -50,7 +50,7 @@ def pde(x, y):
 
 
 def u_func(x):
-    return -np.sin(2 * np.pi * x[:, 0:1])
+    return -np.sin(np.pi * x[:, 0:1])
 
 
 def on_boundary(_, boundary):
