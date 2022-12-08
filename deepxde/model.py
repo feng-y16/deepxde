@@ -528,6 +528,7 @@ class Model:
         model_restore_path=None,
         model_save_path=None,
         epochs=None,
+        skip_training_sgd=False,
     ):
         """Trains the model.
 
@@ -553,6 +554,7 @@ class Model:
             model_save_path (String): Prefix of filenames created for the checkpoint.
             epochs (Integer): Deprecated alias to `iterations`. This will be removed in
                 a future version.
+            skip_training_sgd: whether to migrate training to callback functions.
         """
         if iterations is None and epochs is not None:
             print(
@@ -592,7 +594,7 @@ class Model:
         else:
             if iterations is None:
                 raise ValueError("No iterations for {}.".format(self.opt_name))
-            self._train_sgd(iterations, display_every)
+            self._train_sgd(iterations, display_every, skip_training_sgd)
         self.callbacks.on_train_end()
 
         print("")
@@ -601,7 +603,7 @@ class Model:
             self.save(model_save_path, verbose=1)
         return self.losshistory, self.train_state
 
-    def _train_sgd(self, iterations, display_every):
+    def _train_sgd(self, iterations, display_every, skip_training=False):
         for i in range(iterations):
             self.callbacks.on_epoch_begin()
             self.callbacks.on_batch_begin()
@@ -609,11 +611,13 @@ class Model:
             self.train_state.set_data_train(
                 *self.data.train_next_batch(self.batch_size)
             )
-            self._train_step(
-                self.train_state.X_train,
-                self.train_state.y_train,
-                self.train_state.train_aux_vars,
-            )
+
+            if not skip_training:
+                self._train_step(
+                    self.train_state.X_train,
+                    self.train_state.y_train,
+                    self.train_state.train_aux_vars,
+                )
 
             self.train_state.epoch += 1
             self.train_state.step += 1

@@ -50,7 +50,7 @@ def pde(x, y):
 
 
 def u_func(x):
-    return -np.sin(np.pi * x[:, 0:1])
+    return -np.sin(2 * np.pi * x[:, 0:1])
 
 
 def on_boundary(_, boundary):
@@ -327,7 +327,7 @@ if len(load) == 0:
         resampler = dde.callbacks.PDELossAccumulativeResampler(
             sample_every=resample_every,
             sample_num_domain=sample_num_domain,
-            random_num_domain=int(num_train_samples_domain - num_train_samples_domain * resample_ratio),
+            random_num_domain=num_train_samples_domain - sample_num_domain,
             debug_dir=save_dir,
             symmetric_constraints=None)
         callbacks.append(resampler)
@@ -343,7 +343,8 @@ if len(load) == 0:
     if annealing:
         resampler = dde.callbacks.PDELearningRateAnnealing(adjust_every=epochs // 20, loss_weights=loss_weights)
         callbacks.append(resampler)
-    loss_history, train_state = model.train(epochs=epochs, callbacks=callbacks, display_every=epochs // 20)
+    loss_history, train_state = model.train(iterations=epochs, callbacks=callbacks, display_every=epochs // 20,
+                                            skip_training_sgd=resample)
     resampled_data = callbacks[0].sampled_train_points if len(callbacks) > 0 and prefix[:4] != "PINN" else None
     info = {"net": net, "train_x_all": data.train_x_all, "train_x": data.train_x, "train_x_bc": data.train_x_bc,
             "train_y": data.train_y, "test_x": data.test_x, "test_y": data.test_y,

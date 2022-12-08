@@ -799,13 +799,16 @@ class PDELossAccumulativeResampler(Callback):
     """Resample the training points for PDE losses every given period."""
 
     def __init__(self, sample_every=100, sample_num_domain=100, random_num_domain=100, debug_dir=None, epochs=20000,
-                 symmetric_constraints=None):
+                 symmetric_constraints=None, target_loss_weight=-0.025, clip_threshold=1, warmup_ratio=0.2):
         super().__init__()
         self.sample_every = sample_every
         self.random_num_domain = random_num_domain
         self.sample_num_domain = sample_num_domain
         self.sample_times = epochs // sample_every
         self.debug_dir = debug_dir
+        self.target_loss_weight = target_loss_weight
+        self.clip_threshold = clip_threshold
+        self.warmup_ratio = warmup_ratio
         self.current_sample_times = 0
         self.epochs_since_last_sample = 0
         self.sampled_train_points = []
@@ -905,23 +908,41 @@ class PDELossAccumulativeResampler(Callback):
         self.gan = FNN([self.x_dim] + [32] * 3 + [self.x_dim], "relu", "Glorot normal")
 
     @tf.function(jit_compile=config.xla_jit)
-    def reverse_train_step(self, inputs, targets=None, auxiliary_vars=None, loss_weight=0.001):
-        # inputs and targets are np.ndarray and automatically converted to Tensor.
+    def train_step(self, inputs, target_inputs, targets=None, auxiliary_vars=None, target_loss_weight=-1):
         with tf.GradientTape() as tape:
-            losses = self.model.outputs_losses_train(inputs, targets, auxiliary_vars)[1]
-            total_loss = loss_weight * tf.math.reduce_sum(losses)
+            loss = self.model.outputs_losses_train(inputs, targets, auxiliary_vars)[1]
+            loss = tf.math.reduce_sum(loss)
+            target_outs = self.model.data.pde(target_inputs, self.model.net(target_inputs))
+            target_loss = None
+            if type(target_outs) == list:
+                for target_out in target_outs:
+                    if target_loss is None:
+                        target_loss = tf.math.reduce_mean(target_out ** 2)
+                    else:
+                        target_loss += tf.math.reduce_mean(target_out ** 2)
+            else:
+                target_loss = tf.math.reduce_mean(target_outs ** 2)
+            total_loss = loss + target_loss_weight * target_loss
         trainable_variables = (
                 self.model.net.trainable_variables + self.model.external_trainable_variables
         )
         grads = tape.gradient(total_loss, trainable_variables)
         self.model.opt.apply_gradients(zip(grads, trainable_variables))
-        return total_loss
+        return loss, target_loss
 
     def update_net(self):
-        random_points_domain = self.model.data.geom.random_points(self.random_num_domain)
-        loss_weight = -1e-3 if self.current_sample_times < self.sample_times / 2 else 1e-3
-        loss = self.reverse_train_step(random_points_domain, loss_weight=loss_weight)
-        return utils.to_numpy(loss)
+        if self.current_sample_times < self.warmup_ratio * self.sample_times:
+            random_points_domain = self.model.data.geom.random_points(self.random_num_domain + self.sample_num_domain)
+            target_loss_weight = 1
+        else:
+            random_points_domain = self.model.data.geom.random_points(self.random_num_domain)
+            target_loss_weight = self.target_loss_weight
+        loss, target_loss = self.train_step(self.current_train_x(), random_points_domain,
+                                            target_loss_weight=target_loss_weight)
+        if self.clip_threshold is not None:
+            for w in self.model.net.trainable_variables:
+                w.assign(tf.clip_by_value(w, -self.clip_threshold, self.clip_threshold))
+        return utils.to_numpy(loss), utils.to_numpy(target_loss)
 
     def on_epoch_end(self):
         self.epochs_since_last_sample += 1
@@ -932,26 +953,23 @@ class PDELossAccumulativeResampler(Callback):
             return
         self.current_sample_times += 1
         self.epochs_since_last_sample = 0
-        max_before = 0
-        max_after = 0
-        for w in self.model.net.trainable_variables:
-            max_before = max(max_before, utils.to_numpy(tf.reduce_max(tf.abs(w))))
-            w.assign(tf.clip_by_value(w, -5, 5))
-            max_after = max(max_after, utils.to_numpy(tf.reduce_max(tf.abs(w))))
+        if self.current_sample_times < self.warmup_ratio * self.sample_times:
+            loss, target_loss = self.update_net()
+            self.pbar.update()
+            self.pbar.set_postfix(loss=loss, target_loss=target_loss)
+            return
         sampled_points_domain, total_loss = self.sample_train_points(self.sample_num_domain,
                                                                      self.x_mean,
                                                                      self.x_width,
                                                                      self.symmetric_constraints)
         sampled_points_domain = utils.to_numpy(sampled_points_domain)
-        total_loss_gan = utils.to_numpy(total_loss)
+        gan_loss = utils.to_numpy(total_loss)
         self.sampled_points_domain = sampled_points_domain
+        self.sampled_train_points.append(sampled_points_domain)
         self.pbar.update()
-        total_loss_random = self.update_net()
-        self.pbar.set_postfix(loss_gan=total_loss_gan, loss_random=total_loss_random,
-                              sample_mean=sampled_points_domain.mean(axis=0),
-                              max_b=max_before, max_a=max_after)
-        self.model.data.train_x = self.current_train_x()
-        self.sampled_train_points.append(self.sampled_points_domain)
+        loss, target_loss = self.update_net()
+        self.pbar.set_postfix(gan_loss=gan_loss, loss=loss, target_loss=target_loss,
+                              sample_mean=self.sampled_train_points[-1].mean(axis=0))
         if self.debug_dir is not None and self.current_sample_times % 1000 == 0 or self.current_sample_times == 1:
             plt.scatter(self.sampled_train_points[-1][:, 0], self.sampled_train_points[-1][:, 1],
                         color="tab:blue", s=0.1)
