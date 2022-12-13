@@ -19,9 +19,9 @@ from solver import solve
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=20000)
-    parser.add_argument("--num-train-samples-domain", type=int, default=8000)
-    parser.add_argument("--num-train-samples-boundary", type=int, default=400)
-    parser.add_argument("--num-train-samples-initial", type=int, default=400)
+    parser.add_argument("--num-train-samples-domain", type=int, default=5000)
+    parser.add_argument("--num-train-samples-boundary", type=int, default=1000)
+    parser.add_argument("--num-train-samples-initial", type=int, default=1000)
     parser.add_argument("--resample-ratio", type=float, default=0.5)
     parser.add_argument("--resample-every", type=int, default=1)
     parser.add_argument("--resample", action="store_true", default=False)
@@ -148,8 +148,7 @@ def test_nn_loss(times=None, test_models=None):
         t = time * np.ones(num_test_samples ** 2).reshape(num_test_samples ** 2, 1)
         X = np.hstack((X, t))
         num_results = len(test_models)
-        num_results += 1
-        plt.figure(figsize=(12, 3 * num_results))
+        plt.figure(figsize=(6, 3 * num_results))
         gs = GridSpec(num_results, 1)
         result_count = 0
         for legend, test_model in test_models.items():
@@ -423,7 +422,7 @@ else:
     data = dde.data.TimePDE(
         spatio_temporal_domain, pde,
         [boundary_condition_u, boundary_condition_v, boundary_condition_p,
-         initial_condition_u, initial_condition_v, initial_condition_p],
+         initial_condition_u, initial_condition_v],
         num_domain=num_train_samples_domain,
         num_boundary=num_train_samples_boundary,
         num_initial=num_train_samples_initial,

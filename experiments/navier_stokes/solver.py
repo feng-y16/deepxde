@@ -260,6 +260,14 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
         v_tent[:, 0] = 0.0
         v_tent[:, -1] = 0.0
         v_tent[-1, :] = 0.0
+        # u_tent[0, :] = u_tent[1, :]
+        # u_tent[:, 0] = u_tent[:, 1]
+        # u_tent[:, -1] = u_tent[:, -2]
+        # u_tent[-1, :] = u_tent[-2, :]
+        # v_tent[0, :] = v_tent[1, :]
+        # v_tent[:, 0] = v_tent[:, 1]
+        # v_tent[:, -1] = v_tent[:, -2]
+        # v_tent[-1, :] = v_tent[-2, :]
 
         d_u_tent__d_x = central_difference_x(u_tent)
         d_v_tent__d_y = central_difference_y(v_tent)
@@ -309,6 +317,10 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
             p_next[0, :] = p_next[1, :]
             p_next[:, 0] = p_next[:, 1]
             p_next[-1, :] = p_next[-2, :]
+            # p_next[:, -1] = 0
+            # p_next[0, :] = 0
+            # p_next[:, 0] = 0
+            # p_next[-1, :] = 0
 
             p_prev = p_next
 
@@ -341,6 +353,14 @@ def solve(n_points=256, n_iterations=20000, time_length=1, re=10, record_steps=1
         v_next[:, 0] = 0.0
         v_next[:, -1] = 0.0
         v_next[-1, :] = 0.0
+        # u_next[0, :] = u_next[1, :]
+        # u_next[:, 0] = u_next[:, 1]
+        # u_next[:, -1] = u_next[:, -2]
+        # u_next[-1, :] = u_next[-2, :]
+        # v_next[0, :] = v_next[1, :]
+        # v_next[:, 0] = v_next[:, 1]
+        # v_next[:, -1] = v_next[:, -2]
+        # v_next[-1, :] = v_next[-2, :]
 
         if (i + 1) % record_steps == 0:
             time = (i + 1) * time_step_length
