@@ -12,13 +12,13 @@ if [ "$num_GPUs" -eq 0 ]; then
   exit 0
 fi
 if [ "$exp_name" == "navier_stokes" ]; then
-  res=(10)
+  res=(100)
   for re in "${res[@]}"; do
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
     --re "$re" &> experiments/"$exp_name"/PINN_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
     CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-    --re "$re" --resample # &> experiments/"$exp_name"/LWIS_"$re".0.txt &
+    --re "$re" --resample &> experiments/"$exp_name"/LWIS_"$re".0.txt &
     GPU_index=$(((GPU_index+1)%num_GPUs))
   done
 else
@@ -26,7 +26,7 @@ else
   &> experiments/"$exp_name"/PINN.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
   CUDA_VISIBLE_DEVICES=${GPUs[GPU_index]} DDEBACKEND=tensorflow python experiments/"$exp_name"/"$exp_name".py \
-  --resample # &> experiments/"$exp_name"/LWIS.txt &
+  --resample &> experiments/"$exp_name"/LWIS.txt &
   GPU_index=$(((GPU_index+1)%num_GPUs))
 fi
 set +e
